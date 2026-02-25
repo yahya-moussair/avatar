@@ -1,11 +1,19 @@
 from dotenv import load_dotenv
 from livekit import agents
 from livekit.agents import AgentSession, Agent, JobProcess
-from livekit.plugins import silero, langchain, deepgram, cartesia
+from livekit.plugins import silero, langchain, deepgram, elevenlabs
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
 from graph import create_workflow
 
 load_dotenv(".env.local")
+
+
+def _make_tts():
+    """ElevenLabs TTS — voice 'Rachel' (21m00Tcm4TlvDq8ikWAM) with turbo model."""
+    return elevenlabs.TTS(
+        model="eleven_turbo_v2_5",
+        voice_id="21m00Tcm4TlvDq8ikWAM",  # Rachel — warm, clear female voice
+    )
 
 
 class Assistant(Agent):
@@ -27,10 +35,11 @@ def prewarm(proc: JobProcess):
 async def my_agent(ctx: agents.JobContext):
     await ctx.connect()
 
+    # LLM = Groq (graph.py). TTS = ElevenLabs.
     session = AgentSession(
         stt=deepgram.STT(model="nova-3"),
         llm=langchain.LLMAdapter(graph=create_workflow()),
-        tts=cartesia.TTS(model="sonic-3", voice="9626c31c-bec5-4cca-baa8-f8ba9e84c8bc"),
+        tts=_make_tts(),
         vad=ctx.proc.userdata["vad"],
         turn_detection=MultilingualModel(),
     )
@@ -46,5 +55,6 @@ if __name__ == "__main__":
         agents.WorkerOptions(
             entrypoint_fnc=my_agent,
             prewarm_fnc=prewarm,
+            agent_name="default",  # for explicit dispatch from frontend token API
         )
     )
