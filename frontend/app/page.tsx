@@ -1,19 +1,46 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { LiveKitRoom, RoomAudioRenderer } from "@livekit/components-react";
+import {
+  LiveKitRoom,
+  RoomAudioRenderer,
+  useRemoteParticipants,
+  useConnectionState,
+} from "@livekit/components-react";
+import { ConnectionState } from "livekit-client";
 import { AvatarScene } from "@/components/AvatarScene";
 import { useRemoteAudioLevel } from "@/components/useRemoteAudioLevel";
 
 const ROOM_NAME = "voice-agent-room";
 
 function RoomContent({ onDisconnect }: { onDisconnect: () => void }) {
-  const volume = useRemoteAudioLevel();
+  const { volume, bandsRef } = useRemoteAudioLevel();
+  const remoteParticipants = useRemoteParticipants();
+  const connectionState = useConnectionState();
+
+  const agentConnected = remoteParticipants.length > 0;
+
+  let statusText = "Connecting to room…";
+  let statusClass = "";
+
+  if (connectionState === ConnectionState.Connected) {
+    if (agentConnected) {
+      statusText = "Connected — speak to Ada";
+      statusClass = "connected";
+    } else {
+      statusText = "Waiting for Ada to join…";
+      statusClass = "waiting";
+    }
+  } else if (connectionState === ConnectionState.Disconnected) {
+    statusText = "Disconnected";
+    statusClass = "disconnected";
+  }
 
   return (
     <>
-      <RoomAudioRenderer volume={1} />
-      <AvatarScene volume={volume} />
+      <RoomAudioRenderer />
+      <AvatarScene volume={volume} bandsRef={bandsRef} />
+      <div className={`status ${statusClass}`}>{statusText}</div>
       <div className="controls">
         <button className="btn-disconnect" onClick={onDisconnect}>
           Disconnect
@@ -65,7 +92,6 @@ export default function Home() {
     return (
       <div className="app">
         <div className="canvas-wrap" />
-        <div className="status connected">Connected — speak to Ada</div>
         <LiveKitRoom
           serverUrl={serverUrl}
           token={token}
@@ -77,7 +103,7 @@ export default function Home() {
             setError(err.message);
             setStatus("error");
           }}
-          style={{ width: "100%", height: "100%" }}
+          style={{ position: "absolute", inset: 0 }}
         >
           <RoomContent onDisconnect={handleDisconnect} />
         </LiveKitRoom>

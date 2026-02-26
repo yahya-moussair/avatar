@@ -50,10 +50,13 @@ export async function POST(req: NextRequest) {
     if (host) {
       try {
         const dispatchClient = new AgentDispatchClient(host, apiKey, apiSecret);
-        await dispatchClient.createDispatch(room, agentName);
-      } catch (dispatchErr) {
-        console.warn("Agent dispatch failed (agent may still join via auto-dispatch):", dispatchErr);
+        const dispatch = await dispatchClient.createDispatch(room, agentName);
+        console.log("Agent dispatch OK:", JSON.stringify(dispatch));
+      } catch (dispatchErr: any) {
+        console.error("AGENT DISPATCH FAILED:", dispatchErr?.message || dispatchErr);
       }
+    } else {
+      console.error("NO LIVEKIT HOST — cannot dispatch agent");
     }
 
     return NextResponse.json({

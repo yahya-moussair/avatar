@@ -88,6 +88,10 @@ html, body {
   color: #86efac;
 }
 
+.status.waiting {
+  color: #fde68a;
+}
+
 .status.disconnected {
   color: #fca5a5;
 }

@@ -9,10 +9,10 @@ load_dotenv(".env.local")
 
 
 def _make_tts():
-    """ElevenLabs TTS — voice 'Rachel' (21m00Tcm4TlvDq8ikWAM) with turbo model."""
+    """ElevenLabs TTS — voice 'Charlotte' (XB0fDUnXU5powFXDhCwa) with turbo model."""
     return elevenlabs.TTS(
         model="eleven_turbo_v2_5",
-        voice_id="21m00Tcm4TlvDq8ikWAM",  # Rachel — warm, clear female voice
+        voice_id="XB0fDUnXU5powFXDhCwa",  # Charlotte — elegant old British female voice
     )
 
 
