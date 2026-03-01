@@ -11,8 +11,10 @@ import type { AudioBands } from "./useRemoteAudioLevel";
 const AVATAR_PATH = "/avatars/avatar.glb";
 const ENVIRONMENT_PATH = "/environments/silent_hill-library.glb";
 const SITTING_ANIM_PATH = "/animations/sitting.fbx";
+const ENGINE_PATH = "/environments/analytical_engine.glb";
 
 useGLTF.preload(ENVIRONMENT_PATH);
+useGLTF.preload(ENGINE_PATH);
 
 function useAvatarAvailable(): boolean | null {
   const [available, setAvailable] = useState<boolean | null>(null);
@@ -335,6 +337,56 @@ function EnvironmentModel() {
   );
 }
 
+// ─── Babbage's Analytical Engine (desk prop) ──────────────────────────
+
+function AnalyticalEngine() {
+  const { scene } = useGLTF(ENGINE_PATH);
+  const groupRef = useRef<Group>(null);
+  const ready = useRef(false);
+  const [engineScale, setEngineScale] = useState<number | null>(null);
+  const [engineCenter, setEngineCenter] = useState<THREE.Vector3 | null>(null);
+
+  useEffect(() => {
+    if (!scene || ready.current) return;
+    ready.current = true;
+
+    scene.traverse((obj: THREE.Object3D) => {
+      if ((obj as THREE.Mesh).isMesh) {
+        const m = obj as THREE.Mesh;
+        m.castShadow = true;
+        m.receiveShadow = true;
+      }
+    });
+
+    // Auto-scale and center the model
+    scene.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(scene);
+    const size = new THREE.Vector3();
+    const center = new THREE.Vector3();
+    box.getSize(size);
+    box.getCenter(center);
+    const maxDim = Math.max(size.x, size.y, size.z, 0.001);
+    // Scale so the engine is about 1 unit tall (visible on desk)
+    const s = 1.0 / maxDim;
+    console.info("[Engine] raw size:", size, "center:", center, "scale:", s);
+    setEngineScale(s);
+    setEngineCenter(center);
+  }, [scene]);
+
+  if (!scene || engineScale === null || !engineCenter) return null;
+
+  // Place on the desk surface — offset so the model's center sits at the target position
+  return (
+    <group
+      ref={groupRef}
+      position={[-0.8, 1.15, -1.5]}
+      scale={engineScale}
+    >
+      <primitive object={scene} position={[-engineCenter.x, -engineCenter.y, -engineCenter.z]} />
+    </group>
+  );
+}
+
 // ─── Main Scene ───────────────────────────────────────────────────────
 
 export function AvatarScene({
@@ -427,6 +479,11 @@ export function AvatarScene({
         {/* GLB Library Environment */}
         <Suspense fallback={null}>
           <EnvironmentModel />
+        </Suspense>
+
+        {/* Babbage's Analytical Engine on the desk */}
+        <Suspense fallback={null}>
+          <AnalyticalEngine />
         </Suspense>
 
         {/* Avatar */}
