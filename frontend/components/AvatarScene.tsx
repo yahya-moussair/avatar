@@ -2,7 +2,7 @@
 
 import { useRef, useEffect, useState, Suspense, Component } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { useGLTF, useAnimations, Environment, ContactShadows, OrbitControls, Sparkles } from "@react-three/drei";
+import { useGLTF, useFBX, useAnimations, Environment, ContactShadows, OrbitControls, Sparkles } from "@react-three/drei";
 import { EffectComposer, Bloom, Vignette } from "@react-three/postprocessing";
 import * as THREE from "three";
 import type { Group } from "three";
@@ -10,6 +10,7 @@ import type { AudioBands } from "./useRemoteAudioLevel";
 
 const AVATAR_PATH = "/avatars/avatar.glb";
 const ENVIRONMENT_PATH = "/environments/silent_hill-library.glb";
+const SITTING_ANIM_PATH = "/animations/sitting.fbx";
 
 useGLTF.preload(ENVIRONMENT_PATH);
 
@@ -72,7 +73,19 @@ function AvatarModel({ bandsRef }: AvatarProps) {
   const gltf = useGLTF(AVATAR_PATH);
   const sceneRef = useRef(gltf.scene);
   const scene = sceneRef.current;
-  const { actions } = useAnimations(gltf.animations ?? [], scene);
+
+  // Load the sitting animation from FBX
+  const sittingFbx = useFBX(SITTING_ANIM_PATH);
+  const sittingClips = sittingFbx.animations;
+
+  // Rename the sitting clip so it doesn't clash with existing clips
+  if (sittingClips.length > 0) {
+    sittingClips[0].name = "Sitting";
+  }
+
+  // Merge sitting animation with any existing avatar animations
+  const allClips = [...(gltf.animations ?? []), ...sittingClips];
+  const { actions } = useAnimations(allClips, scene);
 
   const smoothVol = useRef(0);
   const smoothF1 = useRef(0);
@@ -86,13 +99,22 @@ function AvatarModel({ bandsRef }: AvatarProps) {
     const box = new THREE.Box3().setFromObject(scene);
     const size = new THREE.Vector3();
     box.getSize(size);
-    console.info("[Avatar] loaded! bounding box size:", size, "position: [0, -1.2, 0]");
+    console.info("[Avatar] loaded! bounding box size:", size);
+    console.info("[Avatar] available animations:", Object.keys(actions ?? {}));
 
-    if (!actions || Object.keys(actions).length === 0) return;
-    Object.keys(actions).forEach((name) => {
-      const action = actions[name];
-      if (action) action.reset().fadeIn(0.3).setLoop(2201, Infinity).play();
-    });
+    // Play the sitting animation
+    if (actions?.["Sitting"]) {
+      actions["Sitting"].reset().fadeIn(0.3).setLoop(THREE.LoopRepeat, Infinity).play();
+      console.info("[Avatar] Sitting animation playing");
+    } else {
+      // Fallback: play any available animations
+      if (actions && Object.keys(actions).length > 0) {
+        Object.keys(actions).forEach((name) => {
+          const action = actions[name];
+          if (action) action.reset().fadeIn(0.3).setLoop(THREE.LoopRepeat, Infinity).play();
+        });
+      }
+    }
   }, [actions]);
 
   useFrame((_, delta) => {
@@ -206,7 +228,7 @@ function AvatarModel({ bandsRef }: AvatarProps) {
   });
 
   return (
-    <group ref={groupRef} scale={2.2} position={[-0.3, -1.2, 1]}>
+    <group ref={groupRef} scale={2.2} position={[-1.8, -1, -3]}>
       <primitive object={scene} />
     </group>
   );
@@ -384,7 +406,7 @@ export function AvatarScene({
 
         {/* Camera controls — inside the library looking at avatar */}
         <OrbitControls
-          target={[-0.3, 0.5, 1]}
+          target={[-1, 0.5, -1.9]}
           enableDamping
           dampingFactor={0.12}
           minDistance={1.5}
@@ -431,7 +453,7 @@ export function AvatarScene({
 
         {/* Contact shadow under avatar */}
         <ContactShadows
-          position={[-0.3, -1.19, 1]}
+          position={[-1, -1.19, -1.9]}
           opacity={0.5}
           scale={10}
           blur={2.5}
