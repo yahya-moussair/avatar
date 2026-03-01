@@ -49,8 +49,8 @@ export function useRemoteAudioLevel(): {
     const ctx = new AudioContext();
     const source = ctx.createMediaStreamSource(new MediaStream([track]));
     const analyser = ctx.createAnalyser();
-    analyser.fftSize = 1024;
-    analyser.smoothingTimeConstant = 0.3; // fast response for lip sync
+    analyser.fftSize = 2048;
+    analyser.smoothingTimeConstant = 0.1; // minimal smoothing for tight sync
     source.connect(analyser);
 
     const data = new Uint8Array(analyser.frequencyBinCount);

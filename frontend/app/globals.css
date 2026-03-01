@@ -9,8 +9,8 @@ html, body {
   height: 100%;
   overflow: hidden;
   font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-  background: #0f0f12;
-  color: #e4e4e7;
+  background: #2a2420;
+  color: #e8dcc8;
 }
 
 #__next, .app {
@@ -21,7 +21,7 @@ html, body {
 .canvas-wrap {
   position: absolute;
   inset: 0;
-  background: radial-gradient(ellipse 80% 60% at 50% 90%, #1a1a2e 0%, #0f0f12 100%);
+  background: #2a2420;
 }
 
 .controls {
@@ -51,23 +51,23 @@ html, body {
 }
 
 .btn-connect {
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-  color: white;
+  background: linear-gradient(135deg, #8B6536 0%, #C5A55A 100%);
+  color: #2a1c10;
 }
 
 .btn-connect:hover:not(:disabled) {
   transform: scale(1.02);
-  box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4);
+  box-shadow: 0 4px 20px rgba(197, 165, 90, 0.4);
 }
 
 .btn-disconnect {
-  background: #27272a;
-  color: #e4e4e7;
-  border: 1px solid #3f3f46;
+  background: #2A1A0A;
+  color: #e8dcc8;
+  border: 1px solid #5C3A21;
 }
 
 .btn-disconnect:hover:not(:disabled) {
-  background: #3f3f46;
+  background: #3B2518;
   transform: scale(1.02);
 }
 
@@ -107,5 +107,5 @@ html, body {
 }
 
 .title span {
-  color: #a78bfa;
+  color: #C5A55A;
 }

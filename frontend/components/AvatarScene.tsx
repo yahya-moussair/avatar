@@ -2,11 +2,16 @@
 
 import { useRef, useEffect, useState, Suspense, Component } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { useGLTF, useAnimations } from "@react-three/drei";
+import { useGLTF, useAnimations, Environment, ContactShadows, OrbitControls, Sparkles } from "@react-three/drei";
+import { EffectComposer, Bloom, Vignette } from "@react-three/postprocessing";
+import * as THREE from "three";
 import type { Group } from "three";
 import type { AudioBands } from "./useRemoteAudioLevel";
 
 const AVATAR_PATH = "/avatars/avatar.glb";
+const ENVIRONMENT_PATH = "/environments/silent_hill-library.glb";
+
+useGLTF.preload(ENVIRONMENT_PATH);
 
 function useAvatarAvailable(): boolean | null {
   const [available, setAvailable] = useState<boolean | null>(null);
@@ -39,169 +44,26 @@ class GLBErrorBoundary extends Component<AvatarProps, { hasError: boolean }> {
   }
 }
 
-// ─── Full-face speech shapes ─────────────────────────────────────────────
-// Each shape is a complete facial pose: viseme + jaw + lips + tongue + cheeks.
-// During speech we step through these in a natural order, like real animation.
-
-type MorphMap = Record<string, number>;
-
-// The shapes cycle in this order, imitating a natural consonant-vowel pattern:
-// close → open → spread → round → close → open → ...
-const SPEECH_SHAPES: MorphMap[] = [
-  // 0: AA — wide open "ah"
-  {
-    viseme_aa: 0.9,
-    jawOpen: 0.48,
-    mouthOpen: 0.38,
-    mouthLowerDownLeft: 0.22,
-    mouthLowerDownRight: 0.22,
-    mouthUpperUpLeft: 0.12,
-    mouthUpperUpRight: 0.12,
-    cheekSquintLeft: 0.05,
-    cheekSquintRight: 0.05,
-  },
-  // 1: PP — lips pressed (consonant)
-  {
-    viseme_PP: 0.85,
-    mouthClose: 0.45,
-    mouthPressLeft: 0.4,
-    mouthPressRight: 0.4,
-    jawOpen: 0.02,
-    cheekPuff: 0.12,
-    mouthShrugLower: 0.08,
-  },
-  // 2: E — spread "eh"
-  {
-    viseme_E: 0.9,
-    jawOpen: 0.3,
-    mouthOpen: 0.22,
-    mouthStretchLeft: 0.3,
-    mouthStretchRight: 0.3,
-    mouthSmileLeft: 0.12,
-    mouthSmileRight: 0.12,
-    mouthLowerDownLeft: 0.14,
-    mouthLowerDownRight: 0.14,
-    mouthDimpleLeft: 0.06,
-    mouthDimpleRight: 0.06,
-  },
-  // 3: O — rounded "oh"
-  {
-    viseme_O: 0.9,
-    mouthPucker: 0.4,
-    mouthFunnel: 0.3,
-    jawOpen: 0.28,
-    mouthOpen: 0.2,
-    mouthLowerDownLeft: 0.1,
-    mouthLowerDownRight: 0.1,
-    mouthShrugLower: 0.06,
-  },
-  // 4: FF — lower lip to teeth
-  {
-    viseme_FF: 0.85,
-    mouthRollLower: 0.35,
-    mouthLowerDownLeft: 0.12,
-    mouthLowerDownRight: 0.12,
-    mouthUpperUpLeft: 0.1,
-    mouthUpperUpRight: 0.1,
-    jawOpen: 0.06,
-  },
-  // 5: AA again (variation — slightly different)
-  {
-    viseme_aa: 0.8,
-    jawOpen: 0.42,
-    mouthOpen: 0.32,
-    mouthLowerDownLeft: 0.2,
-    mouthLowerDownRight: 0.2,
-    mouthStretchLeft: 0.06,
-    mouthStretchRight: 0.06,
-  },
-  // 6: TH — tongue out
-  {
-    viseme_TH: 0.85,
-    tongueOut: 0.4,
-    jawOpen: 0.12,
-    mouthOpen: 0.18,
-    mouthLowerDownLeft: 0.08,
-    mouthLowerDownRight: 0.08,
-    mouthUpperUpLeft: 0.06,
-    mouthUpperUpRight: 0.06,
-  },
-  // 7: I — spread wide "ee"
-  {
-    viseme_I: 0.9,
-    jawOpen: 0.12,
-    mouthStretchLeft: 0.38,
-    mouthStretchRight: 0.38,
-    mouthSmileLeft: 0.16,
-    mouthSmileRight: 0.16,
-    mouthDimpleLeft: 0.08,
-    mouthDimpleRight: 0.08,
-    cheekSquintLeft: 0.07,
-    cheekSquintRight: 0.07,
-  },
-  // 8: U — tight pucker "oo"
-  {
-    viseme_U: 0.9,
-    mouthPucker: 0.6,
-    mouthFunnel: 0.4,
-    jawOpen: 0.1,
-    mouthShrugLower: 0.12,
-    mouthRollLower: 0.06,
-    mouthRollUpper: 0.06,
-  },
-  // 9: NN — nasal, mouth closed, nostrils
-  {
-    viseme_nn: 0.8,
-    jawOpen: 0.04,
-    mouthClose: 0.3,
-    mouthShrugLower: 0.15,
-    mouthShrugUpper: 0.08,
-    noseSneerLeft: 0.1,
-    noseSneerRight: 0.1,
-    mouthPressLeft: 0.08,
-    mouthPressRight: 0.08,
-  },
-  // 10: SS — sibilant hiss
-  {
-    viseme_SS: 0.85,
-    jawOpen: 0.06,
-    mouthClose: 0.18,
-    mouthStretchLeft: 0.16,
-    mouthStretchRight: 0.16,
-    mouthShrugLower: 0.1,
-    mouthUpperUpLeft: 0.04,
-    mouthUpperUpRight: 0.04,
-  },
-  // 11: DD — tongue tap
-  {
-    viseme_DD: 0.7,
-    jawOpen: 0.2,
-    mouthOpen: 0.16,
-    tongueOut: 0.22,
-    jawForward: 0.05,
-    mouthLowerDownLeft: 0.08,
-    mouthLowerDownRight: 0.08,
-  },
-  // 12: RR — rhotic
-  {
-    viseme_RR: 0.85,
-    jawOpen: 0.16,
-    mouthOpen: 0.1,
-    mouthPucker: 0.2,
-    mouthFunnel: 0.15,
-    mouthShrugUpper: 0.1,
-  },
+// ─── Frequency-driven lip sync ───────────────────────────────────────────
+const MORPH_LIST = [
+  "jawOpen", "mouthOpen", "mouthClose",
+  "mouthLowerDownLeft", "mouthLowerDownRight",
+  "mouthUpperUpLeft", "mouthUpperUpRight",
+  "mouthStretchLeft", "mouthStretchRight",
+  "mouthSmileLeft", "mouthSmileRight",
+  "mouthDimpleLeft", "mouthDimpleRight",
+  "mouthPucker", "mouthFunnel",
+  "mouthPressLeft", "mouthPressRight",
+  "mouthShrugLower", "mouthShrugUpper",
+  "mouthRollLower", "mouthRollUpper",
+  "cheekSquintLeft", "cheekSquintRight", "cheekPuff",
+  "noseSneerLeft", "noseSneerRight",
+  "tongueOut", "jawForward",
+  "viseme_aa", "viseme_E", "viseme_I", "viseme_O", "viseme_U",
+  "viseme_PP", "viseme_FF", "viseme_TH", "viseme_SS",
+  "viseme_DD", "viseme_RR", "viseme_nn",
+  "viseme_sil", "viseme_CH", "viseme_kk",
 ];
-
-// Natural-feeling order to step through shapes.
-// Alternates consonants and vowels like real speech.
-const SHAPE_SEQUENCE = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 10, 7, 3, 11, 2, 12, 8, 1, 5];
-
-// Collect all morph names
-const ALL_MORPH_NAMES = new Set<string>();
-SPEECH_SHAPES.forEach((s) => Object.keys(s).forEach((k) => ALL_MORPH_NAMES.add(k)));
-["viseme_sil", "viseme_CH", "viseme_kk"].forEach((n) => ALL_MORPH_NAMES.add(n));
-const MORPH_LIST = Array.from(ALL_MORPH_NAMES);
 
 // ─── Avatar Model ───────────────────────────────────────────────────────
 
@@ -212,17 +74,20 @@ function AvatarModel({ bandsRef }: AvatarProps) {
   const scene = sceneRef.current;
   const { actions } = useAnimations(gltf.animations ?? [], scene);
 
-  // Animation state
   const smoothVol = useRef(0);
+  const smoothF1 = useRef(0);
+  const smoothF2 = useRef(0);
+  const smoothSib = useRef(0);
+  const smoothFric = useRef(0);
   const currentWeights = useRef<Record<string, number>>({});
-  const seqIndex = useRef(0);        // current position in SHAPE_SEQUENCE
-  const shapeTimer = useRef(0);      // time since last shape change
-  const wasSpeaking = useRef(false);  // to detect speech onset
-  const currentShape = useRef<MorphMap>({}); // current target shape (blended for transition)
-  const prevShape = useRef<MorphMap>({});    // previous shape (for crossfade)
-  const crossfade = useRef(1);              // 0 = all prevShape, 1 = all currentShape
 
   useEffect(() => {
+    // Debug: confirm avatar loaded
+    const box = new THREE.Box3().setFromObject(scene);
+    const size = new THREE.Vector3();
+    box.getSize(size);
+    console.info("[Avatar] loaded! bounding box size:", size, "position: [0, -1.2, 0]");
+
     if (!actions || Object.keys(actions).length === 0) return;
     Object.keys(actions).forEach((name) => {
       const action = actions[name];
@@ -235,69 +100,102 @@ function AvatarModel({ bandsRef }: AvatarProps) {
     const bands = bandsRef?.current ?? { volume: 0, f1: 0, f2: 0, sibilant: 0, fricative: 0, prevVolume: 0 };
     const cw = currentWeights.current;
 
-    // ── Volume envelope: fast attack, gentle release ──
     const rawVol = bands.volume;
-    if (rawVol > smoothVol.current) {
-      smoothVol.current += (rawVol - smoothVol.current) * 25 * dt;
-    } else {
-      smoothVol.current += (rawVol - smoothVol.current) * 6 * dt;
-    }
-    if (smoothVol.current < 0.005) smoothVol.current = 0;
+    const fastAtk = 28 * dt;
+    const medAtk = 22 * dt;
+    const fastRel = 14 * dt;
+    const medRel = 9 * dt;
+
+    smoothVol.current += (rawVol - smoothVol.current) * (rawVol > smoothVol.current ? fastAtk : fastRel);
+    smoothF1.current += (bands.f1 - smoothF1.current) * (bands.f1 > smoothF1.current ? fastAtk : fastRel);
+    smoothF2.current += (bands.f2 - smoothF2.current) * (bands.f2 > smoothF2.current ? medAtk : medRel);
+    smoothSib.current += (bands.sibilant - smoothSib.current) * (bands.sibilant > smoothSib.current ? fastAtk : medRel);
+    smoothFric.current += (bands.fricative - smoothFric.current) * (bands.fricative > smoothFric.current ? fastAtk : medRel);
+
+    if (smoothVol.current < 0.002) smoothVol.current = 0;
+
     const vol = smoothVol.current;
-    const speaking = vol > 0.03;
+    const f1 = smoothF1.current;
+    const f2 = smoothF2.current;
+    const sib = smoothSib.current;
+    const fric = smoothFric.current;
+    const speakGate = Math.min(1, Math.max(0, (vol - 0.008) * 5));
 
-    // ── Shape sequencing: step to next shape on a timer ──
-    // Shape duration varies with volume (louder → faster, like emphatic speech)
-    const shapeDuration = speaking ? 0.1 + (1 - vol) * 0.08 : 0.3;
+    const target: Record<string, number> = {};
 
-    shapeTimer.current += dt;
+    if (speakGate > 0) {
+      const intensity = Math.min(1, vol * 2.2) * speakGate;
 
-    if (speaking) {
-      // On speech onset, immediately pick a shape
-      if (!wasSpeaking.current) {
-        wasSpeaking.current = true;
-        shapeTimer.current = shapeDuration; // force immediate shape pick
+      const jaw = Math.min(1, f1 * 3.0) * intensity;
+      target.jawOpen = jaw * 0.65;
+      target.mouthOpen = jaw * 0.45;
+      target.mouthLowerDownLeft = jaw * 0.28;
+      target.mouthLowerDownRight = jaw * 0.28;
+      target.mouthUpperUpLeft = jaw * 0.1;
+      target.mouthUpperUpRight = jaw * 0.1;
+
+      const spread = Math.min(1, f2 * 3.0) * intensity;
+      target.mouthStretchLeft = spread * 0.32;
+      target.mouthStretchRight = spread * 0.32;
+      target.mouthSmileLeft = spread * 0.12;
+      target.mouthSmileRight = spread * 0.12;
+      target.mouthDimpleLeft = spread * 0.06;
+      target.mouthDimpleRight = spread * 0.06;
+
+      const round = Math.max(0, 1 - f2 * 3) * Math.min(1, f1 * 2.5) * intensity;
+      target.mouthPucker = round * 0.45;
+      target.mouthFunnel = round * 0.3;
+
+      const sibAmt = Math.min(1, sib * 3.5) * intensity;
+      target.mouthClose = sibAmt * 0.22;
+      target.mouthShrugLower = sibAmt * 0.1;
+
+      const fricAmt = Math.min(1, fric * 3.5) * intensity;
+      target.mouthRollLower = fricAmt * 0.28;
+
+      target.cheekSquintLeft = jaw * 0.04;
+      target.cheekSquintRight = jaw * 0.04;
+
+      const vAA = Math.max(0, f1 - 0.15) * Math.max(0, 1 - f2 * 3.5) * intensity;
+      const vI  = Math.max(0, f2 - 0.15) * Math.max(0, 1 - f1 * 3.5) * intensity;
+      const vE  = Math.min(Math.max(0, f2 - 0.08), Math.max(0, f1 - 0.08)) * intensity;
+      const vO  = Math.max(0, f1 - 0.08) * Math.max(0, 1 - f2 * 4) * round;
+      const vU  = round * Math.max(0, 1 - jaw * 2.5);
+
+      target.viseme_aa = vAA * 0.65;
+      target.viseme_I  = vI  * 0.55;
+      target.viseme_E  = vE  * 0.45;
+      target.viseme_O  = vO  * 0.55;
+      target.viseme_U  = vU  * 0.45;
+      target.viseme_SS = sibAmt * 0.45;
+      target.viseme_FF = fricAmt * 0.45;
+
+      if (f1 < 0.07 && f2 < 0.07 && sib < 0.05 && fric < 0.05 && vol > 0.02) {
+        const closedAmt = intensity * 0.7;
+        target.viseme_nn = closedAmt * 0.35;
+        target.viseme_PP = closedAmt * 0.25;
+        target.mouthPressLeft = closedAmt * 0.18;
+        target.mouthPressRight = closedAmt * 0.18;
+        target.jawOpen = Math.min(target.jawOpen, 0.04);
+        target.mouthOpen = Math.min(target.mouthOpen, 0.02);
       }
-
-      // Step to next shape when timer expires
-      if (shapeTimer.current >= shapeDuration) {
-        shapeTimer.current = 0;
-        prevShape.current = { ...currentShape.current };
-        crossfade.current = 0;
-
-        seqIndex.current = (seqIndex.current + 1) % SHAPE_SEQUENCE.length;
-        const shapeIdx = SHAPE_SEQUENCE[seqIndex.current];
-        currentShape.current = { ...SPEECH_SHAPES[shapeIdx] };
-      }
-
-      // Advance crossfade (how far into the transition to new shape)
-      crossfade.current = Math.min(1, crossfade.current + dt * 10);
-    } else {
-      wasSpeaking.current = false;
     }
-
-    // ── Compute blended target from crossfade ──
-    const t = crossfade.current * crossfade.current * (3 - 2 * crossfade.current); // ease in-out
-    const intensity = speaking ? Math.min(1, vol * 2.2) : 0;
 
     for (const name of MORPH_LIST) {
-      const a = prevShape.current[name] || 0;
-      const b = currentShape.current[name] || 0;
-      const blended = (a * (1 - t) + b * t) * intensity;
-
+      const tv = target[name] || 0;
       const cur = cw[name] || 0;
-      // Asymmetric smoothing on top of crossfade
-      const speed = blended > cur ? 20 : 8;
-      cw[name] = cur + (blended - cur) * speed * dt;
-      if (cw[name] < 0.001) cw[name] = 0;
+      const isJaw = name.includes("jaw") || name === "mouthOpen" || name.includes("LowerDown");
+      const atkSpd = isJaw ? 24 : 18;
+      const relSpd = isJaw ? 12 : 9;
+      const speed = tv > cur ? atkSpd : relSpd;
+      cw[name] = cur + (tv - cur) * speed * dt;
+      if (cw[name] < 0.0003) cw[name] = 0;
     }
 
-    // ── Apply to every mesh (Head, Teeth, Tongue, etc.) ──
     scene.traverse((obj: any) => {
       if (!obj.isMesh || !obj.morphTargetInfluences || !obj.morphTargetDictionary) return;
       const dict = obj.morphTargetDictionary as Record<string, number>;
       const influences = obj.morphTargetInfluences as number[];
-
       for (const name of MORPH_LIST) {
         const i = dict[name];
         if (typeof i === "number") {
@@ -308,7 +206,7 @@ function AvatarModel({ bandsRef }: AvatarProps) {
   });
 
   return (
-    <group ref={groupRef} scale={1} position={[0, -1.2, 0]}>
+    <group ref={groupRef} scale={2.2} position={[-0.3, -1.2, 1]}>
       <primitive object={scene} />
     </group>
   );
@@ -322,6 +220,100 @@ function FallbackAvatar() {
     </mesh>
   );
 }
+
+// ─── GLB Environment (silent_hill-library) ────────────────────────────
+
+function EnvironmentModel() {
+  const { scene } = useGLTF(ENVIRONMENT_PATH);
+  const groupRef = useRef<Group>(null);
+  const ready = useRef(false);
+  const [transform, setTransform] = useState<{
+    scale: number;
+    offset: [number, number, number];
+  } | null>(null);
+
+  useEffect(() => {
+    if (!scene || ready.current) return;
+    ready.current = true;
+
+    // Enable shadows and fix materials
+    scene.traverse((obj: THREE.Object3D) => {
+      if ((obj as THREE.Mesh).isMesh) {
+        const m = obj as THREE.Mesh;
+        m.castShadow = true;
+        m.receiveShadow = true;
+        const mats = Array.isArray(m.material) ? m.material : [m.material];
+        mats.forEach((mat) => {
+          if (mat && "depthWrite" in mat) {
+            (mat as THREE.Material).depthWrite = true;
+          }
+        });
+      }
+    });
+
+    // Compute bounding box and auto-fit so the room fills the view
+    scene.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(scene);
+    const size = new THREE.Vector3();
+    const center = new THREE.Vector3();
+    box.getSize(size);
+    box.getCenter(center);
+
+    // Scale the environment so the longest axis = 12 units (room-sized)
+    const maxDim = Math.max(size.x, size.y, size.z, 0.001);
+    const targetSize = 12;
+    const s = targetSize / maxDim;
+
+    // Offset so the center of the model goes to origin, then shift down
+    // so the floor aligns with y=-1.2 (avatar feet level)
+    const floorY = box.min.y * s;
+    setTransform({
+      scale: s,
+      offset: [-center.x * s, -floorY - 1.2, -center.z * s],
+    });
+
+    console.info("[Env] raw size:", size, "scale:", s, "floorY:", floorY);
+
+    // Debug: log every mesh's world-space bounding box
+    scene.updateMatrixWorld(true);
+    let meshIdx = 0;
+    scene.traverse((obj: THREE.Object3D) => {
+      if ((obj as THREE.Mesh).isMesh) {
+        const m = obj as THREE.Mesh;
+        const mbox = new THREE.Box3().setFromObject(m);
+        const msize = new THREE.Vector3();
+        const mcenter = new THREE.Vector3();
+        mbox.getSize(msize);
+        mbox.getCenter(mcenter);
+        // Transform to final world space
+        const wCenter = [
+          mcenter.x * s + (-center.x * s),
+          mcenter.y * s + (-floorY - 1.2),
+          mcenter.z * s + (-center.z * s),
+        ];
+        const wSize = [msize.x * s, msize.y * s, msize.z * s];
+        console.info(
+          `[Mesh ${meshIdx}] "${m.name}" center=[${wCenter.map((v) => v.toFixed(2))}] size=[${wSize.map((v) => v.toFixed(2))}]`
+        );
+        meshIdx++;
+      }
+    });
+  }, [scene]);
+
+  if (!scene || !transform) return null;
+
+  return (
+    <group
+      ref={groupRef}
+      scale={transform.scale}
+      position={transform.offset}
+    >
+      <primitive object={scene} />
+    </group>
+  );
+}
+
+// ─── Main Scene ───────────────────────────────────────────────────────
 
 export function AvatarScene({
   volume,
@@ -338,29 +330,84 @@ export function AvatarScene({
   return (
     <div className="canvas-wrap" style={{ position: "absolute", inset: 0 }}>
       <Canvas
-        camera={{ position: [0, 0, 2.5], fov: 45 }}
+        shadows
+        camera={{ position: [0, 1.5, 5], fov: 50 }}
         gl={{
           antialias: true,
-          alpha: true,
+          alpha: false,
           powerPreference: "high-performance",
           failIfMajorPerformanceCaveat: false,
+          toneMapping: THREE.ACESFilmicToneMapping,
+          toneMappingExposure: 1.3,
         }}
         onCreated={({ gl }) => {
-          gl.setClearColor(0x0f0f12, 0);
+          gl.setClearColor(0x2a2420, 1);
+          gl.shadowMap.enabled = true;
+          gl.shadowMap.type = THREE.PCFSoftShadowMap;
           const canvas = gl.domElement;
           canvas.addEventListener("webglcontextlost", (e: Event) => {
             e.preventDefault();
-            console.warn("WebGL context lost. Refresh the page if the avatar stops updating.");
+            console.warn("WebGL context lost.");
           });
           canvas.addEventListener("webglcontextrestored", () => {
             console.info("WebGL context restored.");
           });
         }}
       >
-        <ambientLight intensity={0.6} />
-        <directionalLight position={[2, 4, 5]} intensity={1.2} />
-        <directionalLight position={[-2, 2, 3]} intensity={0.4} />
-        <pointLight position={[0, 2, 2]} intensity={0.5} />
+        {/* ─── Lighting ─── */}
+        <ambientLight intensity={0.7} color="#E8DCC8" />
+
+        {/* Key light from upper-left */}
+        <directionalLight
+          position={[-3, 4, 2]}
+          intensity={1.4}
+          color="#F5ECD8"
+          castShadow
+          shadow-mapSize-width={2048}
+          shadow-mapSize-height={2048}
+          shadow-camera-far={15}
+          shadow-camera-left={-6}
+          shadow-camera-right={6}
+          shadow-camera-top={6}
+          shadow-camera-bottom={-6}
+          shadow-bias={-0.0003}
+        />
+
+        {/* Fill light */}
+        <directionalLight position={[2, 3, 1]} intensity={0.4} color="#E8DCC0" />
+
+        {/* Warm overhead */}
+        <pointLight position={[0, 3, -1]} intensity={0.5} color="#E8D8C0" decay={2} distance={12} />
+
+        {/* Warm bounce from below */}
+        <pointLight position={[0, -0.5, 0]} intensity={0.15} color="#A08060" decay={2} distance={5} />
+
+        {/* Camera controls — inside the library looking at avatar */}
+        <OrbitControls
+          target={[-0.3, 0.5, 1]}
+          enableDamping
+          dampingFactor={0.12}
+          minDistance={1.5}
+          maxDistance={8}
+          minPolarAngle={Math.PI * 0.15}
+          maxPolarAngle={Math.PI * 0.6}
+          minAzimuthAngle={-Math.PI * 0.6}
+          maxAzimuthAngle={Math.PI * 0.6}
+          enablePan
+          panSpeed={0.5}
+          rotateSpeed={0.6}
+          zoomSpeed={0.8}
+        />
+
+        {/* IBL reflections */}
+        <Environment preset="apartment" />
+
+        {/* GLB Library Environment */}
+        <Suspense fallback={null}>
+          <EnvironmentModel />
+        </Suspense>
+
+        {/* Avatar */}
         <Suspense fallback={<FallbackAvatar />}>
           {showGlb ? (
             <GLBErrorBoundary volume={volume} bandsRef={bandsRef}>
@@ -370,6 +417,37 @@ export function AvatarScene({
             <FallbackAvatar />
           )}
         </Suspense>
+
+        {/* Dust motes */}
+        <Sparkles
+          count={50}
+          scale={[6, 4, 6]}
+          size={1}
+          speed={0.1}
+          opacity={0.07}
+          color="#E8D8C0"
+          position={[0, 1, 0]}
+        />
+
+        {/* Contact shadow under avatar */}
+        <ContactShadows
+          position={[-0.3, -1.19, 1]}
+          opacity={0.5}
+          scale={10}
+          blur={2.5}
+          far={4}
+        />
+
+        {/* Post-processing */}
+        <EffectComposer>
+          <Bloom
+            luminanceThreshold={0.55}
+            luminanceSmoothing={0.9}
+            intensity={0.2}
+            mipmapBlur
+          />
+          <Vignette offset={0.3} darkness={0.45} />
+        </EffectComposer>
       </Canvas>
     </div>
   );
