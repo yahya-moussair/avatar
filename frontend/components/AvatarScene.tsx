@@ -12,9 +12,13 @@ const AVATAR_PATH = "/avatars/avatar.glb";
 const ENVIRONMENT_PATH = "/environments/silent_hill-library.glb";
 const SITTING_ANIM_PATH = "/animations/sitting.fbx";
 const ENGINE_PATH = "/environments/analytical_engine.glb";
+const BRASS_MACHINE_PATH = "/environments/brass_machine.glb";
+const LOOM_PATH = "/environments/mechanical_loom.glb";
 
 useGLTF.preload(ENVIRONMENT_PATH);
 useGLTF.preload(ENGINE_PATH);
+useGLTF.preload(BRASS_MACHINE_PATH);
+useGLTF.preload(LOOM_PATH);
 
 function useAvatarAvailable(): boolean | null {
   const [available, setAvailable] = useState<boolean | null>(null);
@@ -391,10 +395,105 @@ function AnalyticalEngine() {
   return (
     <group
       ref={groupRef}
-      position={[-0.5, 1.2, -1.6]}
+      position={[-0.4, 1.2, -1.6]}
       scale={engineScale}
     >
       <primitive object={scene} position={[-engineCenter.x, -engineCenter.y, -engineCenter.z]} />
+    </group>
+  );
+}
+
+// ─── Brass Machine (floor prop, right side) ───────────────────────────
+
+function BrassMachine() {
+  const { scene } = useGLTF(BRASS_MACHINE_PATH);
+  const groupRef = useRef<Group>(null);
+  const ready = useRef(false);
+  const [machineScale, setMachineScale] = useState<number | null>(null);
+  const [machineCenter, setMachineCenter] = useState<THREE.Vector3 | null>(null);
+
+  useEffect(() => {
+    if (!scene || ready.current) return;
+    ready.current = true;
+
+    scene.traverse((obj: THREE.Object3D) => {
+      if ((obj as THREE.Mesh).isMesh) {
+        const m = obj as THREE.Mesh;
+        m.castShadow = true;
+        m.receiveShadow = true;
+      }
+    });
+
+    scene.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(scene);
+    const size = new THREE.Vector3();
+    const center = new THREE.Vector3();
+    box.getSize(size);
+    box.getCenter(center);
+    const maxDim = Math.max(size.x, size.y, size.z, 0.001);
+    const s = 2.8 / maxDim;
+    console.info("[BrassMachine] raw size:", size, "center:", center, "scale:", s);
+    setMachineScale(s);
+    setMachineCenter(center);
+  }, [scene]);
+
+  if (!scene || machineScale === null || !machineCenter) return null;
+
+  // Place on the ground to the right
+  return (
+    <group
+      ref={groupRef}
+      position={[1.5, -0.2, -1.5]}
+      scale={machineScale}
+    >
+      <primitive object={scene} position={[-machineCenter.x, -machineCenter.y, -machineCenter.z]} />
+    </group>
+  );
+}
+
+// ─── Mechanical Loom (floor prop, next to brass machine) ──────────────
+
+function MechanicalLoom() {
+  const { scene } = useGLTF(LOOM_PATH);
+  const groupRef = useRef<Group>(null);
+  const ready = useRef(false);
+  const [loomScale, setLoomScale] = useState<number | null>(null);
+  const [loomCenter, setLoomCenter] = useState<THREE.Vector3 | null>(null);
+
+  useEffect(() => {
+    if (!scene || ready.current) return;
+    ready.current = true;
+
+    scene.traverse((obj: THREE.Object3D) => {
+      if ((obj as THREE.Mesh).isMesh) {
+        const m = obj as THREE.Mesh;
+        m.castShadow = true;
+        m.receiveShadow = true;
+      }
+    });
+
+    scene.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(scene);
+    const size = new THREE.Vector3();
+    const center = new THREE.Vector3();
+    box.getSize(size);
+    box.getCenter(center);
+    const maxDim = Math.max(size.x, size.y, size.z, 0.001);
+    const s = 2 / maxDim;
+    console.info("[MechanicalLoom] raw size:", size, "center:", center, "scale:", s);
+    setLoomScale(s);
+    setLoomCenter(center);
+  }, [scene]);
+
+  if (!scene || loomScale === null || !loomCenter) return null;
+
+  return (
+    <group
+      ref={groupRef}
+      position={[3, -0.2, -1.5]}
+      scale={loomScale}
+    >
+      <primitive object={scene} position={[-loomCenter.x, -loomCenter.y, -loomCenter.z]} />
     </group>
   );
 }
@@ -496,6 +595,16 @@ export function AvatarScene({
         {/* Babbage's Analytical Engine on the desk */}
         <Suspense fallback={null}>
           <AnalyticalEngine />
+        </Suspense>
+
+        {/* Brass Machine on the floor, right side */}
+        <Suspense fallback={null}>
+          <BrassMachine />
+        </Suspense>
+
+        {/* Mechanical Loom, next to brass machine */}
+        <Suspense fallback={null}>
+          <MechanicalLoom />
         </Suspense>
 
         {/* Avatar */}
