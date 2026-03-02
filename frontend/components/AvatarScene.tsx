@@ -76,18 +76,22 @@ function AvatarModel({ bandsRef }: AvatarProps) {
   const sceneRef = useRef(gltf.scene);
   const scene = sceneRef.current;
 
-  // Load the sitting animation from FBX
+  // Load the sitting animation from FBX and clean it up once
   const sittingFbx = useFBX(SITTING_ANIM_PATH);
-  const sittingClips = sittingFbx.animations;
-
-  // Rename the sitting clip so it doesn't clash with existing clips
-  if (sittingClips.length > 0) {
-    sittingClips[0].name = "Sitting";
+  const cleanedClips = useRef<THREE.AnimationClip[] | null>(null);
+  if (!cleanedClips.current && sittingFbx.animations.length > 0) {
+    const clip = sittingFbx.animations[0];
+    clip.name = "Sitting";
+    // Remove position tracks to prevent root motion / jumping
+    clip.tracks = clip.tracks.filter(
+      (track) => !track.name.endsWith(".position")
+    );
+    cleanedClips.current = [clip];
   }
 
   // Merge sitting animation with any existing avatar animations
-  const allClips = [...(gltf.animations ?? []), ...sittingClips];
-  const { actions } = useAnimations(allClips, scene);
+  const allClips = [...(gltf.animations ?? []), ...(cleanedClips.current ?? [])];
+  const { actions, mixer } = useAnimations(allClips, scene);
 
   const smoothVol = useRef(0);
   const smoothF1 = useRef(0);
@@ -97,27 +101,23 @@ function AvatarModel({ bandsRef }: AvatarProps) {
   const currentWeights = useRef<Record<string, number>>({});
 
   useEffect(() => {
-    // Debug: confirm avatar loaded
-    const box = new THREE.Box3().setFromObject(scene);
-    const size = new THREE.Vector3();
-    box.getSize(size);
-    console.info("[Avatar] loaded! bounding box size:", size);
-    console.info("[Avatar] available animations:", Object.keys(actions ?? {}));
+    if (!actions || !mixer) return;
 
-    // Play the sitting animation
-    if (actions?.["Sitting"]) {
-      actions["Sitting"].reset().fadeIn(0.3).setLoop(THREE.LoopRepeat, Infinity).play();
+    // Stop everything first to prevent T-pose blending
+    mixer.stopAllAction();
+
+    // Play the sitting animation immediately (no fade = no T-pose flash)
+    if (actions["Sitting"]) {
+      const action = actions["Sitting"];
+      action.reset();
+      action.setLoop(THREE.LoopRepeat, Infinity);
+      action.clampWhenFinished = true;
+      action.setEffectiveWeight(1);
+      action.setEffectiveTimeScale(1);
+      action.play();
       console.info("[Avatar] Sitting animation playing");
-    } else {
-      // Fallback: play any available animations
-      if (actions && Object.keys(actions).length > 0) {
-        Object.keys(actions).forEach((name) => {
-          const action = actions[name];
-          if (action) action.reset().fadeIn(0.3).setLoop(THREE.LoopRepeat, Infinity).play();
-        });
-      }
     }
-  }, [actions]);
+  }, [actions, mixer]);
 
   useFrame((_, delta) => {
     const dt = Math.min(delta, 0.05);
@@ -148,37 +148,37 @@ function AvatarModel({ bandsRef }: AvatarProps) {
     const target: Record<string, number> = {};
 
     if (speakGate > 0) {
-      const intensity = Math.min(1, vol * 2.2) * speakGate;
+      const intensity = Math.min(1, vol * 1.4) * speakGate;
 
-      const jaw = Math.min(1, f1 * 3.0) * intensity;
-      target.jawOpen = jaw * 0.65;
-      target.mouthOpen = jaw * 0.45;
-      target.mouthLowerDownLeft = jaw * 0.28;
-      target.mouthLowerDownRight = jaw * 0.28;
-      target.mouthUpperUpLeft = jaw * 0.1;
-      target.mouthUpperUpRight = jaw * 0.1;
+      const jaw = Math.min(1, f1 * 2.0) * intensity;
+      target.jawOpen = jaw * 0.35;
+      target.mouthOpen = jaw * 0.25;
+      target.mouthLowerDownLeft = jaw * 0.15;
+      target.mouthLowerDownRight = jaw * 0.15;
+      target.mouthUpperUpLeft = jaw * 0.05;
+      target.mouthUpperUpRight = jaw * 0.05;
 
-      const spread = Math.min(1, f2 * 3.0) * intensity;
-      target.mouthStretchLeft = spread * 0.32;
-      target.mouthStretchRight = spread * 0.32;
-      target.mouthSmileLeft = spread * 0.12;
-      target.mouthSmileRight = spread * 0.12;
-      target.mouthDimpleLeft = spread * 0.06;
-      target.mouthDimpleRight = spread * 0.06;
+      const spread = Math.min(1, f2 * 2.0) * intensity;
+      target.mouthStretchLeft = spread * 0.16;
+      target.mouthStretchRight = spread * 0.16;
+      target.mouthSmileLeft = spread * 0.06;
+      target.mouthSmileRight = spread * 0.06;
+      target.mouthDimpleLeft = spread * 0.03;
+      target.mouthDimpleRight = spread * 0.03;
 
-      const round = Math.max(0, 1 - f2 * 3) * Math.min(1, f1 * 2.5) * intensity;
-      target.mouthPucker = round * 0.45;
-      target.mouthFunnel = round * 0.3;
+      const round = Math.max(0, 1 - f2 * 3) * Math.min(1, f1 * 1.8) * intensity;
+      target.mouthPucker = round * 0.22;
+      target.mouthFunnel = round * 0.15;
 
-      const sibAmt = Math.min(1, sib * 3.5) * intensity;
-      target.mouthClose = sibAmt * 0.22;
-      target.mouthShrugLower = sibAmt * 0.1;
+      const sibAmt = Math.min(1, sib * 2.5) * intensity;
+      target.mouthClose = sibAmt * 0.12;
+      target.mouthShrugLower = sibAmt * 0.05;
 
-      const fricAmt = Math.min(1, fric * 3.5) * intensity;
-      target.mouthRollLower = fricAmt * 0.28;
+      const fricAmt = Math.min(1, fric * 2.5) * intensity;
+      target.mouthRollLower = fricAmt * 0.14;
 
-      target.cheekSquintLeft = jaw * 0.04;
-      target.cheekSquintRight = jaw * 0.04;
+      target.cheekSquintLeft = jaw * 0.02;
+      target.cheekSquintRight = jaw * 0.02;
 
       const vAA = Math.max(0, f1 - 0.15) * Math.max(0, 1 - f2 * 3.5) * intensity;
       const vI  = Math.max(0, f2 - 0.15) * Math.max(0, 1 - f1 * 3.5) * intensity;
@@ -186,22 +186,22 @@ function AvatarModel({ bandsRef }: AvatarProps) {
       const vO  = Math.max(0, f1 - 0.08) * Math.max(0, 1 - f2 * 4) * round;
       const vU  = round * Math.max(0, 1 - jaw * 2.5);
 
-      target.viseme_aa = vAA * 0.65;
-      target.viseme_I  = vI  * 0.55;
-      target.viseme_E  = vE  * 0.45;
-      target.viseme_O  = vO  * 0.55;
-      target.viseme_U  = vU  * 0.45;
-      target.viseme_SS = sibAmt * 0.45;
-      target.viseme_FF = fricAmt * 0.45;
+      target.viseme_aa = vAA * 0.35;
+      target.viseme_I  = vI  * 0.28;
+      target.viseme_E  = vE  * 0.22;
+      target.viseme_O  = vO  * 0.28;
+      target.viseme_U  = vU  * 0.22;
+      target.viseme_SS = sibAmt * 0.22;
+      target.viseme_FF = fricAmt * 0.22;
 
       if (f1 < 0.07 && f2 < 0.07 && sib < 0.05 && fric < 0.05 && vol > 0.02) {
-        const closedAmt = intensity * 0.7;
-        target.viseme_nn = closedAmt * 0.35;
-        target.viseme_PP = closedAmt * 0.25;
-        target.mouthPressLeft = closedAmt * 0.18;
-        target.mouthPressRight = closedAmt * 0.18;
-        target.jawOpen = Math.min(target.jawOpen, 0.04);
-        target.mouthOpen = Math.min(target.mouthOpen, 0.02);
+        const closedAmt = intensity * 0.4;
+        target.viseme_nn = closedAmt * 0.18;
+        target.viseme_PP = closedAmt * 0.12;
+        target.mouthPressLeft = closedAmt * 0.1;
+        target.mouthPressRight = closedAmt * 0.1;
+        target.jawOpen = Math.min(target.jawOpen, 0.03);
+        target.mouthOpen = Math.min(target.mouthOpen, 0.015);
       }
     }
 
@@ -230,7 +230,7 @@ function AvatarModel({ bandsRef }: AvatarProps) {
   });
 
   return (
-    <group ref={groupRef} scale={2.2} position={[-1.8, -1, -3]}>
+    <group ref={groupRef} scale={2.2} position={[-1.8, 0.1, -1]}>
       <primitive object={scene} />
     </group>
   );
