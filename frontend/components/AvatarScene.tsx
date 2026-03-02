@@ -417,7 +417,7 @@ export function AvatarScene({
     <div className="canvas-wrap" style={{ position: "absolute", inset: 0 }}>
       <Canvas
         shadows
-        camera={{ position: [0, 1.5, 5], fov: 50 }}
+        camera={{ position: [0, 3, 4], fov: 50 }}
         gl={{
           antialias: true,
           alpha: false,
@@ -470,7 +470,7 @@ export function AvatarScene({
 
         {/* Camera controls — inside the library looking at avatar */}
         <OrbitControls
-          target={[-1, 0.5, -1.9]}
+          target={[-0.5, 0.3, -1.5]}
           enableDamping
           dampingFactor={0.12}
           minDistance={1.5}
