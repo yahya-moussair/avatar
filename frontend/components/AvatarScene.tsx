@@ -539,7 +539,7 @@ function RetroComputer() {
   return (
     <group
       ref={groupRef}
-      position={[4.35, 1, -4.6]}
+      position={[4.2, 1.5, -5]}
       scale={pcScale}
       rotation={[0, -Math.PI / 1, 0]}
     >
