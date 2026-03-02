@@ -148,58 +148,70 @@ function AvatarModel({ bandsRef }: AvatarProps) {
     const target: Record<string, number> = {};
 
     if (speakGate > 0) {
-      const intensity = Math.min(1, vol * 1.4) * speakGate;
+      const intensity = Math.min(1, vol * 1.6) * speakGate;
 
+      // ── Jaw (vertical open) — moderate ──
       const jaw = Math.min(1, f1 * 2.0) * intensity;
-      target.jawOpen = jaw * 0.35;
-      target.mouthOpen = jaw * 0.25;
-      target.mouthLowerDownLeft = jaw * 0.15;
-      target.mouthLowerDownRight = jaw * 0.15;
-      target.mouthUpperUpLeft = jaw * 0.05;
-      target.mouthUpperUpRight = jaw * 0.05;
+      target.jawOpen = jaw * 0.3;
+      target.mouthOpen = jaw * 0.2;
+      target.mouthLowerDownLeft = jaw * 0.12;
+      target.mouthLowerDownRight = jaw * 0.12;
+      target.mouthUpperUpLeft = jaw * 0.04;
+      target.mouthUpperUpRight = jaw * 0.04;
 
-      const spread = Math.min(1, f2 * 2.0) * intensity;
-      target.mouthStretchLeft = spread * 0.16;
-      target.mouthStretchRight = spread * 0.16;
-      target.mouthSmileLeft = spread * 0.06;
-      target.mouthSmileRight = spread * 0.06;
-      target.mouthDimpleLeft = spread * 0.03;
-      target.mouthDimpleRight = spread * 0.03;
+      // ── Spread (I / E shapes) — widen the mouth ──
+      const spread = Math.min(1, f2 * 2.5) * intensity;
+      target.mouthStretchLeft = spread * 0.35;
+      target.mouthStretchRight = spread * 0.35;
+      target.mouthSmileLeft = spread * 0.15;
+      target.mouthSmileRight = spread * 0.15;
+      target.mouthDimpleLeft = spread * 0.06;
+      target.mouthDimpleRight = spread * 0.06;
 
-      const round = Math.max(0, 1 - f2 * 3) * Math.min(1, f1 * 1.8) * intensity;
-      target.mouthPucker = round * 0.22;
-      target.mouthFunnel = round * 0.15;
+      // ── Rounding (O / U shapes) — pucker the lips ──
+      const round = Math.max(0, 1 - f2 * 2.5) * Math.min(1, f1 * 2.0) * intensity;
+      target.mouthPucker = round * 0.45;
+      target.mouthFunnel = round * 0.35;
 
+      // ── Sibilants (S, Z) ──
       const sibAmt = Math.min(1, sib * 2.5) * intensity;
-      target.mouthClose = sibAmt * 0.12;
-      target.mouthShrugLower = sibAmt * 0.05;
+      target.mouthClose = sibAmt * 0.15;
+      target.mouthShrugLower = sibAmt * 0.06;
 
+      // ── Fricatives (F, V) ──
       const fricAmt = Math.min(1, fric * 2.5) * intensity;
-      target.mouthRollLower = fricAmt * 0.14;
+      target.mouthRollLower = fricAmt * 0.18;
 
       target.cheekSquintLeft = jaw * 0.02;
       target.cheekSquintRight = jaw * 0.02;
 
-      const vAA = Math.max(0, f1 - 0.15) * Math.max(0, 1 - f2 * 3.5) * intensity;
-      const vI  = Math.max(0, f2 - 0.15) * Math.max(0, 1 - f1 * 3.5) * intensity;
-      const vE  = Math.min(Math.max(0, f2 - 0.08), Math.max(0, f1 - 0.08)) * intensity;
-      const vO  = Math.max(0, f1 - 0.08) * Math.max(0, 1 - f2 * 4) * round;
-      const vU  = round * Math.max(0, 1 - jaw * 2.5);
+      // ── Viseme shapes — these drive the distinct vowel looks ──
+      // A: open jaw, neutral width
+      const vAA = Math.max(0, f1 - 0.12) * Math.max(0, 1 - f2 * 3.0) * intensity;
+      // I: spread/smile, low jaw
+      const vI  = Math.max(0, f2 - 0.12) * Math.max(0, 1 - f1 * 3.0) * intensity;
+      // E: moderate spread + moderate open
+      const vE  = Math.min(Math.max(0, f2 - 0.06), Math.max(0, f1 - 0.06)) * intensity;
+      // O: rounded, medium open
+      const vO  = Math.max(0, f1 - 0.06) * Math.max(0, 1 - f2 * 3.5) * round;
+      // U: tight round, barely open
+      const vU  = round * Math.max(0, 1 - jaw * 2.0);
 
-      target.viseme_aa = vAA * 0.35;
-      target.viseme_I  = vI  * 0.28;
-      target.viseme_E  = vE  * 0.22;
-      target.viseme_O  = vO  * 0.28;
-      target.viseme_U  = vU  * 0.22;
-      target.viseme_SS = sibAmt * 0.22;
-      target.viseme_FF = fricAmt * 0.22;
+      target.viseme_aa = vAA * 0.55;
+      target.viseme_I  = vI  * 0.50;
+      target.viseme_E  = vE  * 0.40;
+      target.viseme_O  = vO  * 0.55;
+      target.viseme_U  = vU  * 0.45;
+      target.viseme_SS = sibAmt * 0.30;
+      target.viseme_FF = fricAmt * 0.30;
 
+      // ── Closed-mouth consonants (M, N, P, B) ──
       if (f1 < 0.07 && f2 < 0.07 && sib < 0.05 && fric < 0.05 && vol > 0.02) {
-        const closedAmt = intensity * 0.4;
-        target.viseme_nn = closedAmt * 0.18;
-        target.viseme_PP = closedAmt * 0.12;
-        target.mouthPressLeft = closedAmt * 0.1;
-        target.mouthPressRight = closedAmt * 0.1;
+        const closedAmt = intensity * 0.45;
+        target.viseme_nn = closedAmt * 0.25;
+        target.viseme_PP = closedAmt * 0.20;
+        target.mouthPressLeft = closedAmt * 0.15;
+        target.mouthPressRight = closedAmt * 0.15;
         target.jawOpen = Math.min(target.jawOpen, 0.03);
         target.mouthOpen = Math.min(target.mouthOpen, 0.015);
       }
