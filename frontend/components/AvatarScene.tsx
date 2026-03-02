@@ -14,11 +14,13 @@ const SITTING_ANIM_PATH = "/animations/sitting.fbx";
 const ENGINE_PATH = "/environments/analytical_engine.glb";
 const BRASS_MACHINE_PATH = "/environments/brass_machine.glb";
 const LOOM_PATH = "/environments/mechanical_loom.glb";
+const RETRO_PC_PATH = "/environments/retro_computer.glb";
 
 useGLTF.preload(ENVIRONMENT_PATH);
 useGLTF.preload(ENGINE_PATH);
 useGLTF.preload(BRASS_MACHINE_PATH);
 useGLTF.preload(LOOM_PATH);
+useGLTF.preload(RETRO_PC_PATH);
 
 function useAvatarAvailable(): boolean | null {
   const [available, setAvailable] = useState<boolean | null>(null);
@@ -498,6 +500,54 @@ function MechanicalLoom() {
   );
 }
 
+// ─── Retro Computer (floor prop) ──────────────────────────────────────
+
+function RetroComputer() {
+  const { scene } = useGLTF(RETRO_PC_PATH);
+  const groupRef = useRef<Group>(null);
+  const ready = useRef(false);
+  const [pcScale, setPcScale] = useState<number | null>(null);
+  const [pcCenter, setPcCenter] = useState<THREE.Vector3 | null>(null);
+
+  useEffect(() => {
+    if (!scene || ready.current) return;
+    ready.current = true;
+
+    scene.traverse((obj: THREE.Object3D) => {
+      if ((obj as THREE.Mesh).isMesh) {
+        const m = obj as THREE.Mesh;
+        m.castShadow = true;
+        m.receiveShadow = true;
+      }
+    });
+
+    scene.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(scene);
+    const size = new THREE.Vector3();
+    const center = new THREE.Vector3();
+    box.getSize(size);
+    box.getCenter(center);
+    const maxDim = Math.max(size.x, size.y, size.z, 0.001);
+    const s = 1 / maxDim;
+    console.info("[RetroPC] raw size:", size, "center:", center, "scale:", s);
+    setPcScale(s);
+    setPcCenter(center);
+  }, [scene]);
+
+  if (!scene || pcScale === null || !pcCenter) return null;
+
+  return (
+    <group
+      ref={groupRef}
+      position={[4.1, 1.5, -4.9]}
+      scale={pcScale}
+      rotation={[0, -Math.PI / 1, 0]}
+    >
+      <primitive object={scene} position={[-pcCenter.x, -pcCenter.y, -pcCenter.z]} />
+    </group>
+  );
+}
+
 // ─── Main Scene ───────────────────────────────────────────────────────
 
 export function AvatarScene({
@@ -605,6 +655,11 @@ export function AvatarScene({
         {/* Mechanical Loom, next to brass machine */}
         <Suspense fallback={null}>
           <MechanicalLoom />
+        </Suspense>
+
+        {/* Retro Computer */}
+        <Suspense fallback={null}>
+          <RetroComputer />
         </Suspense>
 
         {/* Avatar */}
