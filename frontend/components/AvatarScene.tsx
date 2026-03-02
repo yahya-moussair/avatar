@@ -539,7 +539,7 @@ function RetroComputer() {
   return (
     <group
       ref={groupRef}
-      position={[4.1, 1.5, -4.9]}
+      position={[4.35, 1, -4.6]}
       scale={pcScale}
       rotation={[0, -Math.PI / 1, 0]}
     >
@@ -643,9 +643,9 @@ export function AvatarScene({
         </Suspense>
 
         {/* Babbage's Analytical Engine on the desk */}
-        <Suspense fallback={null}>
+        {/* <Suspense fallback={null}>
           <AnalyticalEngine />
-        </Suspense>
+        </Suspense> */}
 
         {/* Brass Machine on the floor, right side */}
         <Suspense fallback={null}>
