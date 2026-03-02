@@ -367,7 +367,7 @@ function AnalyticalEngine() {
     box.getCenter(center);
     const maxDim = Math.max(size.x, size.y, size.z, 0.001);
     // Scale so the engine is about 1 unit tall (visible on desk)
-    const s = 1.0 / maxDim;
+    const s = 2 / maxDim;
     console.info("[Engine] raw size:", size, "center:", center, "scale:", s);
     setEngineScale(s);
     setEngineCenter(center);
@@ -379,7 +379,7 @@ function AnalyticalEngine() {
   return (
     <group
       ref={groupRef}
-      position={[-0.8, 1.15, -1.5]}
+      position={[-0.5, 1.2, -1.6]}
       scale={engineScale}
     >
       <primitive object={scene} position={[-engineCenter.x, -engineCenter.y, -engineCenter.z]} />
