@@ -10,11 +10,13 @@ import {
 import { ConnectionState } from "livekit-client";
 import { AvatarScene } from "@/components/AvatarScene";
 import { useRemoteAudioLevel } from "@/components/useRemoteAudioLevel";
+import { useLipSync } from "@/components/useLipSync";
 
 const ROOM_NAME = "voice-agent-room";
 
 function RoomContent({ onDisconnect }: { onDisconnect: () => void }) {
   const { volume, bandsRef } = useRemoteAudioLevel();
+  const { lipSyncRef, consumeVisemes } = useLipSync();
   const remoteParticipants = useRemoteParticipants();
   const connectionState = useConnectionState();
 
@@ -39,7 +41,7 @@ function RoomContent({ onDisconnect }: { onDisconnect: () => void }) {
   return (
     <>
       <RoomAudioRenderer />
-      <AvatarScene volume={volume} bandsRef={bandsRef} />
+      <AvatarScene volume={volume} bandsRef={bandsRef} lipSyncRef={lipSyncRef} consumeVisemes={consumeVisemes} />
       <div className={`status ${statusClass}`}>{statusText}</div>
       <div className="controls">
         <button className="btn-disconnect" onClick={onDisconnect}>

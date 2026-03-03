@@ -7,6 +7,7 @@ import { EffectComposer, Bloom, Vignette } from "@react-three/postprocessing";
 import * as THREE from "three";
 import type { Group } from "three";
 import type { AudioBands } from "./useRemoteAudioLevel";
+import type { LipSyncState } from "./useLipSync";
 
 const AVATAR_PATH = "/avatars/avatar.glb";
 const ENVIRONMENT_PATH = "/environments/silent_hill-library.glb";
@@ -39,6 +40,8 @@ function useAvatarAvailable(): boolean | null {
 interface AvatarProps {
   volume: number;
   bandsRef?: React.RefObject<AudioBands>;
+  lipSyncRef?: React.RefObject<LipSyncState>;
+  consumeVisemes?: (bandsRef: React.RefObject<AudioBands> | undefined, delta: number) => void;
   children?: React.ReactNode;
 }
 
@@ -76,7 +79,7 @@ const MORPH_LIST = [
 
 // ─── Avatar Model ───────────────────────────────────────────────────────
 
-function AvatarModel({ bandsRef }: AvatarProps) {
+function AvatarModel({ bandsRef, lipSyncRef, consumeVisemes }: AvatarProps) {
   const groupRef = useRef<Group>(null);
   const gltf = useGLTF(AVATAR_PATH);
   const sceneRef = useRef(gltf.scene);
@@ -130,6 +133,13 @@ function AvatarModel({ bandsRef }: AvatarProps) {
     const bands = bandsRef?.current ?? { volume: 0, f1: 0, f2: 0, sibilant: 0, fricative: 0, prevVolume: 0 };
     const cw = currentWeights.current;
 
+    // ── Step 1: Advance the text-based lip sync system ──
+    if (consumeVisemes) {
+      consumeVisemes(bandsRef, delta);
+    }
+    const ls = lipSyncRef?.current;
+    const textActive = ls?.active ?? false;
+
     const rawVol = bands.volume;
     const fastAtk = 28 * dt;
     const medAtk = 22 * dt;
@@ -144,85 +154,83 @@ function AvatarModel({ bandsRef }: AvatarProps) {
 
     if (smoothVol.current < 0.002) smoothVol.current = 0;
 
-    const vol = smoothVol.current;
-    const f1 = smoothF1.current;
-    const f2 = smoothF2.current;
-    const sib = smoothSib.current;
-    const fric = smoothFric.current;
-    const speakGate = Math.min(1, Math.max(0, (vol - 0.008) * 5));
-
     const target: Record<string, number> = {};
 
-    if (speakGate > 0) {
-      const intensity = Math.min(1, vol * 1.6) * speakGate;
+    // ── Step 2: If text-based lip sync is active, use its morph weights ──
+    if (textActive && ls) {
+      const mw = ls.morphWeights;
+      for (const name of MORPH_LIST) {
+        target[name] = mw[name] ?? 0;
+      }
+    } else {
+      // ── Fallback: frequency-based lip sync ──
+      const vol = smoothVol.current;
+      const f1 = smoothF1.current;
+      const f2 = smoothF2.current;
+      const sib = smoothSib.current;
+      const fric = smoothFric.current;
+      const speakGate = Math.min(1, Math.max(0, (vol - 0.008) * 5));
 
-      // ── Jaw (vertical open) — moderate ──
-      const jaw = Math.min(1, f1 * 2.0) * intensity;
-      target.jawOpen = jaw * 0.3;
-      target.mouthOpen = jaw * 0.2;
-      target.mouthLowerDownLeft = jaw * 0.12;
-      target.mouthLowerDownRight = jaw * 0.12;
-      target.mouthUpperUpLeft = jaw * 0.04;
-      target.mouthUpperUpRight = jaw * 0.04;
+      if (speakGate > 0) {
+        const intensity = Math.min(1, vol * 1.6) * speakGate;
 
-      // ── Spread (I / E shapes) — widen the mouth ──
-      const spread = Math.min(1, f2 * 2.5) * intensity;
-      target.mouthStretchLeft = spread * 0.35;
-      target.mouthStretchRight = spread * 0.35;
-      target.mouthSmileLeft = spread * 0.15;
-      target.mouthSmileRight = spread * 0.15;
-      target.mouthDimpleLeft = spread * 0.06;
-      target.mouthDimpleRight = spread * 0.06;
+        const jaw = Math.min(1, f1 * 2.0) * intensity;
+        target.jawOpen = jaw * 0.3;
+        target.mouthOpen = jaw * 0.2;
+        target.mouthLowerDownLeft = jaw * 0.12;
+        target.mouthLowerDownRight = jaw * 0.12;
+        target.mouthUpperUpLeft = jaw * 0.04;
+        target.mouthUpperUpRight = jaw * 0.04;
 
-      // ── Rounding (O / U shapes) — pucker the lips ──
-      const round = Math.max(0, 1 - f2 * 2.5) * Math.min(1, f1 * 2.0) * intensity;
-      target.mouthPucker = round * 0.45;
-      target.mouthFunnel = round * 0.35;
+        const spread = Math.min(1, f2 * 2.5) * intensity;
+        target.mouthStretchLeft = spread * 0.35;
+        target.mouthStretchRight = spread * 0.35;
+        target.mouthSmileLeft = spread * 0.15;
+        target.mouthSmileRight = spread * 0.15;
+        target.mouthDimpleLeft = spread * 0.06;
+        target.mouthDimpleRight = spread * 0.06;
 
-      // ── Sibilants (S, Z) ──
-      const sibAmt = Math.min(1, sib * 2.5) * intensity;
-      target.mouthClose = sibAmt * 0.15;
-      target.mouthShrugLower = sibAmt * 0.06;
+        const round = Math.max(0, 1 - f2 * 2.5) * Math.min(1, f1 * 2.0) * intensity;
+        target.mouthPucker = round * 0.45;
+        target.mouthFunnel = round * 0.35;
 
-      // ── Fricatives (F, V) ──
-      const fricAmt = Math.min(1, fric * 2.5) * intensity;
-      target.mouthRollLower = fricAmt * 0.18;
+        const sibAmt = Math.min(1, sib * 2.5) * intensity;
+        target.mouthClose = sibAmt * 0.15;
+        target.mouthShrugLower = sibAmt * 0.06;
 
-      target.cheekSquintLeft = jaw * 0.02;
-      target.cheekSquintRight = jaw * 0.02;
+        const fricAmt = Math.min(1, fric * 2.5) * intensity;
+        target.mouthRollLower = fricAmt * 0.18;
 
-      // ── Viseme shapes — these drive the distinct vowel looks ──
-      // A: open jaw, neutral width
-      const vAA = Math.max(0, f1 - 0.12) * Math.max(0, 1 - f2 * 3.0) * intensity;
-      // I: spread/smile, low jaw
-      const vI  = Math.max(0, f2 - 0.12) * Math.max(0, 1 - f1 * 3.0) * intensity;
-      // E: moderate spread + moderate open
-      const vE  = Math.min(Math.max(0, f2 - 0.06), Math.max(0, f1 - 0.06)) * intensity;
-      // O: rounded, medium open
-      const vO  = Math.max(0, f1 - 0.06) * Math.max(0, 1 - f2 * 3.5) * round;
-      // U: tight round, barely open
-      const vU  = round * Math.max(0, 1 - jaw * 2.0);
+        target.cheekSquintLeft = jaw * 0.02;
+        target.cheekSquintRight = jaw * 0.02;
 
-      target.viseme_aa = vAA * 0.55;
-      target.viseme_I  = vI  * 0.50;
-      target.viseme_E  = vE  * 0.40;
-      target.viseme_O  = vO  * 0.55;
-      target.viseme_U  = vU  * 0.45;
-      target.viseme_SS = sibAmt * 0.30;
-      target.viseme_FF = fricAmt * 0.30;
+        const vAA = Math.max(0, f1 - 0.12) * Math.max(0, 1 - f2 * 3.0) * intensity;
+        const vI  = Math.max(0, f2 - 0.12) * Math.max(0, 1 - f1 * 3.0) * intensity;
+        const vE  = Math.min(Math.max(0, f2 - 0.06), Math.max(0, f1 - 0.06)) * intensity;
+        const vO  = Math.max(0, f1 - 0.06) * Math.max(0, 1 - f2 * 3.5) * round;
+        const vU  = round * Math.max(0, 1 - jaw * 2.0);
 
-      // ── Closed-mouth consonants (M, N, P, B) ──
-      if (f1 < 0.07 && f2 < 0.07 && sib < 0.05 && fric < 0.05 && vol > 0.02) {
-        const closedAmt = intensity * 0.45;
-        target.viseme_nn = closedAmt * 0.25;
-        target.viseme_PP = closedAmt * 0.20;
-        target.mouthPressLeft = closedAmt * 0.15;
-        target.mouthPressRight = closedAmt * 0.15;
-        target.jawOpen = Math.min(target.jawOpen, 0.03);
-        target.mouthOpen = Math.min(target.mouthOpen, 0.015);
+        target.viseme_aa = vAA * 0.55;
+        target.viseme_I  = vI  * 0.50;
+        target.viseme_E  = vE  * 0.40;
+        target.viseme_O  = vO  * 0.55;
+        target.viseme_U  = vU  * 0.45;
+        target.viseme_SS = sibAmt * 0.30;
+        target.viseme_FF = fricAmt * 0.30;
+
+        if (f1 < 0.07 && f2 < 0.07 && sib < 0.05 && fric < 0.05 && vol > 0.02) {
+          const closedAmt = intensity * 0.45;
+          target.viseme_nn = closedAmt * 0.25;
+          target.viseme_PP = closedAmt * 0.20;
+          target.mouthPressLeft = closedAmt * 0.15;
+          target.mouthPressRight = closedAmt * 0.15;
+          target.jawOpen = Math.min(target.jawOpen, 0.03);
+          target.mouthOpen = Math.min(target.mouthOpen, 0.015);
+        }
       }
     }
 
+    // ── Step 3: Smooth towards target weights ──
     for (const name of MORPH_LIST) {
       const tv = target[name] || 0;
       const cur = cw[name] || 0;
@@ -234,6 +242,7 @@ function AvatarModel({ bandsRef }: AvatarProps) {
       if (cw[name] < 0.0003) cw[name] = 0;
     }
 
+    // ── Step 4: Apply to mesh morph targets ──
     scene.traverse((obj: any) => {
       if (!obj.isMesh || !obj.morphTargetInfluences || !obj.morphTargetDictionary) return;
       const dict = obj.morphTargetDictionary as Record<string, number>;
@@ -553,10 +562,14 @@ function RetroComputer() {
 export function AvatarScene({
   volume,
   bandsRef,
+  lipSyncRef,
+  consumeVisemes,
   useFallback = false,
 }: {
   volume: number;
   bandsRef?: React.RefObject<AudioBands>;
+  lipSyncRef?: React.RefObject<LipSyncState>;
+  consumeVisemes?: (bandsRef: React.RefObject<AudioBands> | undefined, delta: number) => void;
   useFallback?: boolean;
 }) {
   const avatarAvailable = useAvatarAvailable();
@@ -666,7 +679,7 @@ export function AvatarScene({
         <Suspense fallback={<FallbackAvatar />}>
           {showGlb ? (
             <GLBErrorBoundary volume={volume} bandsRef={bandsRef}>
-              <AvatarModel volume={volume} bandsRef={bandsRef} />
+              <AvatarModel volume={volume} bandsRef={bandsRef} lipSyncRef={lipSyncRef} consumeVisemes={consumeVisemes} />
             </GLBErrorBoundary>
           ) : (
             <FallbackAvatar />
