@@ -15,13 +15,13 @@ const SITTING_ANIM_PATH = "/animations/sitting.fbx";
 const ENGINE_PATH = "/environments/analytical_engine.glb";
 const BRASS_MACHINE_PATH = "/environments/brass_machine.glb";
 const LOOM_PATH = "/environments/mechanical_loom.glb";
-const RETRO_PC_PATH = "/environments/retro_computer.glb";
+const ADA_CADRE_PATH = "/environments/ada_cadre.glb";
 
 useGLTF.preload(ENVIRONMENT_PATH);
 useGLTF.preload(ENGINE_PATH);
 useGLTF.preload(BRASS_MACHINE_PATH);
 useGLTF.preload(LOOM_PATH);
-useGLTF.preload(RETRO_PC_PATH);
+useGLTF.preload(ADA_CADRE_PATH);
 
 function useAvatarAvailable(): boolean | null {
   const [available, setAvailable] = useState<boolean | null>(null);
@@ -257,7 +257,7 @@ function AvatarModel({ bandsRef, lipSyncRef, consumeVisemes }: AvatarProps) {
   });
 
   return (
-    <group ref={groupRef} scale={2.2} position={[-1.8, 0.1, -1]}>
+    <group ref={groupRef} scale={2.2} position={[-1.4, 0.1, -0.8]}>
       <primitive object={scene} />
     </group>
   );
@@ -509,14 +509,14 @@ function MechanicalLoom() {
   );
 }
 
-// ─── Retro Computer (floor prop) ──────────────────────────────────────
+// ─── Ada Cadre (floor prop) ───────────────────────────────────────────
 
-function RetroComputer() {
-  const { scene } = useGLTF(RETRO_PC_PATH);
+function AdaCadre() {
+  const { scene } = useGLTF(ADA_CADRE_PATH);
   const groupRef = useRef<Group>(null);
   const ready = useRef(false);
-  const [pcScale, setPcScale] = useState<number | null>(null);
-  const [pcCenter, setPcCenter] = useState<THREE.Vector3 | null>(null);
+  const [cadreScale, setCadreScale] = useState<number | null>(null);
+  const [cadreCenter, setCadreCenter] = useState<THREE.Vector3 | null>(null);
 
   useEffect(() => {
     if (!scene || ready.current) return;
@@ -537,22 +537,21 @@ function RetroComputer() {
     box.getSize(size);
     box.getCenter(center);
     const maxDim = Math.max(size.x, size.y, size.z, 0.001);
-    const s = 1 / maxDim;
-    console.info("[RetroPC] raw size:", size, "center:", center, "scale:", s);
-    setPcScale(s);
-    setPcCenter(center);
+    const s = 1.5 / maxDim;
+    console.info("[AdaCadre] raw size:", size, "center:", center, "scale:", s);
+    setCadreScale(s);
+    setCadreCenter(center);
   }, [scene]);
 
-  if (!scene || pcScale === null || !pcCenter) return null;
+  if (!scene || cadreScale === null || !cadreCenter) return null;
 
   return (
     <group
       ref={groupRef}
-      position={[4.2, 1.5, -5]}
-      scale={pcScale}
-      rotation={[0, -Math.PI / 1, 0]}
+      position={[4.1, 1.9, -4.9]}
+      scale={cadreScale}
     >
-      <primitive object={scene} position={[-pcCenter.x, -pcCenter.y, -pcCenter.z]} />
+      <primitive object={scene} position={[-cadreCenter.x, -cadreCenter.y, -cadreCenter.z]} />
     </group>
   );
 }
@@ -670,9 +669,9 @@ export function AvatarScene({
           <MechanicalLoom />
         </Suspense>
 
-        {/* Retro Computer */}
+        {/* Ada Cadre */}
         <Suspense fallback={null}>
-          <RetroComputer />
+          <AdaCadre />
         </Suspense>
 
         {/* Avatar */}
