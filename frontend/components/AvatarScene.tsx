@@ -16,12 +16,16 @@ const ENGINE_PATH = "/environments/analytical_engine.glb";
 const BRASS_MACHINE_PATH = "/environments/brass_machine.glb";
 const LOOM_PATH = "/environments/mechanical_loom.glb";
 const ADA_CADRE_PATH = "/environments/ada_cadre.glb";
+const IPHONE_17_PATH = "/environments/iphone_17_pro_max.glb";
+const MACBOOK_M5_PATH = "/environments/macbook_pro_14-inch_m5.glb";
 
 useGLTF.preload(ENVIRONMENT_PATH);
 useGLTF.preload(ENGINE_PATH);
 useGLTF.preload(BRASS_MACHINE_PATH);
 useGLTF.preload(LOOM_PATH);
 useGLTF.preload(ADA_CADRE_PATH);
+useGLTF.preload(IPHONE_17_PATH);
+useGLTF.preload(MACBOOK_M5_PATH);
 
 function useAvatarAvailable(): boolean | null {
   const [available, setAvailable] = useState<boolean | null>(null);
@@ -556,6 +560,102 @@ function AdaCadre() {
   );
 }
 
+// ─── iPhone 17 Pro Max (desk prop) ───────────────────────────────────────
+
+function Iphone17ProMax() {
+  const { scene } = useGLTF(IPHONE_17_PATH);
+  const groupRef = useRef<Group>(null);
+  const ready = useRef(false);
+  const [modelScale, setModelScale] = useState<number | null>(null);
+  const [modelCenter, setModelCenter] = useState<THREE.Vector3 | null>(null);
+
+  useEffect(() => {
+    if (!scene || ready.current) return;
+    ready.current = true;
+
+    scene.traverse((obj: THREE.Object3D) => {
+      if ((obj as THREE.Mesh).isMesh) {
+        const m = obj as THREE.Mesh;
+        m.castShadow = true;
+        m.receiveShadow = true;
+      }
+    });
+
+    scene.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(scene);
+    const size = new THREE.Vector3();
+    const center = new THREE.Vector3();
+    box.getSize(size);
+    box.getCenter(center);
+    const maxDim = Math.max(size.x, size.y, size.z, 0.001);
+    // Make the phone roughly handheld size on the desk
+    const s = 0.5 / maxDim;
+    setModelScale(s);
+    setModelCenter(center);
+  }, [scene]);
+
+  if (!scene || modelScale === null || !modelCenter) return null;
+
+  return (
+    <group
+      ref={groupRef}
+      position={[0.2, 1.1, -1.4]}
+      rotation={[0, Math.PI, 1.6]}
+      scale={modelScale}
+    >
+      <primitive object={scene} position={[-modelCenter.x, -modelCenter.y, -modelCenter.z]} />
+    </group>
+  );
+}
+
+// ─── MacBook Pro 14‑inch M5 (desk prop) ─────────────────────────────────
+
+function MacbookProM5() {
+  const { scene } = useGLTF(MACBOOK_M5_PATH);
+  const groupRef = useRef<Group>(null);
+  const ready = useRef(false);
+  const [modelScale, setModelScale] = useState<number | null>(null);
+  const [modelCenter, setModelCenter] = useState<THREE.Vector3 | null>(null);
+
+  useEffect(() => {
+    if (!scene || ready.current) return;
+    ready.current = true;
+
+    scene.traverse((obj: THREE.Object3D) => {
+      if ((obj as THREE.Mesh).isMesh) {
+        const m = obj as THREE.Mesh;
+        m.castShadow = true;
+        m.receiveShadow = true;
+      }
+    });
+
+    scene.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(scene);
+    const size = new THREE.Vector3();
+    const center = new THREE.Vector3();
+    box.getSize(size);
+    box.getCenter(center);
+    const maxDim = Math.max(size.x, size.y, size.z, 0.001);
+    // Make the laptop about desk-sized
+    const s = 1.0 / maxDim;
+    setModelScale(s);
+    setModelCenter(center);
+  }, [scene]);
+
+  if (!scene || modelScale === null || !modelCenter) return null;
+
+  return (
+    <group
+      ref={groupRef}
+      position={[-0.8, 1.4, -1.6]}
+      rotation={[0, Math.PI, 0]}
+      scale={modelScale}
+    >
+      <primitive object={scene} position={[-modelCenter.x, -modelCenter.y, -modelCenter.z]} />
+    </group>
+  );
+}
+
 // ─── Main Scene ───────────────────────────────────────────────────────
 
 export function AvatarScene({
@@ -672,6 +772,16 @@ export function AvatarScene({
         {/* Ada Cadre */}
         <Suspense fallback={null}>
           <AdaCadre />
+        </Suspense>
+
+        {/* iPhone 17 Pro Max on the desk */}
+        <Suspense fallback={null}>
+          <Iphone17ProMax />
+        </Suspense>
+
+        {/* MacBook Pro 14-inch M5 on the desk */}
+        <Suspense fallback={null}>
+          <MacbookProM5 />
         </Suspense>
 
         {/* Avatar */}
