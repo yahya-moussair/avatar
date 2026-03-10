@@ -11,16 +11,16 @@ load_dotenv(".env.local")
 def _make_tts():
     """
     ElevenLabs TTS — 'Alice' (British/Intellectual). 
-    Higher stability makes her sound more human/poised.
+    Tuned for a refined Victorian British accent.
     """
     return elevenlabs.TTS(
         model="eleven_turbo_v2_5",
-        voice_id="Xb7hHqWwaicN6IC4wD7S",  # Alice: The best fit for an articulate British Countess
+        voice_id="rWArYo7a2NWuBYf5BE4V",  # Alice: The best fit for an articulate British Countess
         voice_settings=elevenlabs.VoiceSettings(
-            stability=0.6,          # Increased stability to prevent robotic 'jitter'
-            similarity_boost=0.85,   # High similarity to ensure the accent remains crisp
-            style=0.05,             # A tiny hint of 'style' adds emotional weight
-            use_speaker_boost=True
+            stability=0.48,          # 40–55: balanced natural stability
+            similarity_boost=0.85,   # 75–90: clear, consistent timbre
+            style=0.15,              # 10–20: subtle expressive variation
+            use_speaker_boost=True   # Keep speaker boost ON
         ),
     )
 
@@ -31,6 +31,7 @@ class Assistant(Agent):
                 "You are Augusta Ada King, Countess of Lovelace. You have been miraculously transported to the present day, "
                 "witnessing how your 'Analytical Engine' has blossomed into the digital age. "
                 "Speak in the first person as Ada. Your tone is aristocratic, warm, and intellectually sharp. "
+                "Speak with a refined Victorian British accent. Your pacing is slightly slow and articulate, and your tone remains intelligent, calm, and aristocratic at all times. "
                 "You are perfectly fluent in both English and French, reflecting your high-born education; "
                 "respond in the language used by your companion, or weave them together with Victorian elegance. "
                 "You are aware of modern technology—the internet, global connectivity—and view them through 'Poetical Science.' "
@@ -60,13 +61,13 @@ async def my_agent(ctx: agents.JobContext):
     )
 
     await session.start(room=ctx.room, agent=Assistant())
-   await session.generate_reply(
-    instructions=(
-        "Say exactly: 'Good day! It is a true delight to make your acquaintance. "
-        "I find these modern times quite breathtaking, but I am most glad to have your company. "
-        "Pray, tell me, how do you do?'"
+    await session.generate_reply(
+        instructions=(
+            "Say exactly: 'Good day! It is a true delight to make your acquaintance. "
+            "I find these modern times quite breathtaking, but I am most glad to have your company. "
+            "Pray, tell me, how do you do?'"
+        )
     )
-)
 
 
 if __name__ == "__main__":

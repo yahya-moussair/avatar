@@ -599,8 +599,8 @@ function Iphone17ProMax() {
   return (
     <group
       ref={groupRef}
-      position={[0.2, 1.1, -1.4]}
-      rotation={[0, Math.PI, 1.6]}
+      position={[0.1, 1.07, -1.8]}
+      rotation={[0, Math.PI * 0.5, 1.58]}
       scale={modelScale}
     >
       <primitive object={scene} position={[-modelCenter.x, -modelCenter.y, -modelCenter.z]} />
