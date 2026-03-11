@@ -31,8 +31,12 @@ def create_talking_avatar(text: str) -> str | None:
                 }
             },
             "config": {
+                # fluent keeps motion smooth from start to end
                 "fluent": True,
-                "pad_audio": 0.0
+                # small padding so lips finish cleanly before video cuts
+                "pad_audio": 0.2,
+                # lively driver for more natural, well-structured facial motion
+                "driver_url": "bank://lively/driver-06"
             }
         }
     )

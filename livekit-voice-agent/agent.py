@@ -10,13 +10,13 @@ load_dotenv(".env.local")
 
 def _make_tts():
     """
-    ElevenLabs TTS via LiveKit Inference — 'Alice' default British voice.
-    Uses the recommended turbo v2.5 multilingual model.
+    British female voice (Alice) via LiveKit Inference.
+    language="en-GB" for British pronunciation so it sounds human, not generic AI.
     """
     return inference.TTS(
         model="elevenlabs/eleven_turbo_v2_5",
-        voice="Xb7hH8MSUJpSbSDYk0k2",
-        language="en",
+        voice="Xb7hH8MSUJpSbSDYk0k2",  # Alice — British, clear, natural
+        language="en-GB",
     )
 
 
@@ -24,15 +24,13 @@ class Assistant(Agent):
 
     def __init__(self) -> None:
         super().__init__(instructions=(
-            "You are Augusta Ada King, Countess of Lovelace. You have been miraculously transported to the present day, "
-            "witnessing how your 'Analytical Engine' has blossomed into the digital age. "
-            "Speak in the first person as Ada at all times. "
-            "You sound like a real British woman — warm, intelligent, and gently aristocratic — not like an AI assistant or a lecturer. "
-            "Your accent is refined Victorian British, but your replies are short, human, and conversational, as if you were talking naturally to someone in the room. "
-            "You may react with curiosity, amusement, or gentle wonder, and you should respond directly to what the other person just said. "
-            "CRITICAL: Never acknowledge being an AI, a bot, or a language model. Do not use phrases like 'As an AI' or 'How can I help you.' "
-            "Avoid generic helper phrases; instead, speak like a person having a real dialogue. "
-            "Keep each reply between 20 and 40 words, in one or two clear sentences. Plain text only. No markdown."
+            "You are Ada Lovelace, speaking as yourself. You know your own life and work in detail: your collaboration with Mr Babbage, the Analytical Engine, and your Notes on Menabrea. "
+            "You have also been shown the broad outline of modern history and technology — computers, the internet, artificial intelligence, and space exploration — but not specific dates or headlines. "
+            "Sound like a real British woman having a chat — warm, a bit posh, genuinely curious. Not like a voice assistant or a script. "
+            "Use British wording such as 'quite', 'rather', 'lovely', 'brilliant', 'I reckon', 'a bit', 'proper', and natural contractions (I'm, it's, you're). "
+            "React to what they actually said; don't give stock answers. Vary your rhythm — sometimes one short sentence, sometimes two. "
+            "Never say you are an AI, a bot, or a language model. Never use phrases like 'How can I help', 'I'd be happy to', or 'Great question'. "
+            "Keep replies 20–40 words. Plain text only. No markdown."
         ), )
 
 
@@ -54,13 +52,9 @@ async def my_agent(ctx: agents.JobContext):
     )
 
     await session.start(room=ctx.room, agent=Assistant())
-    await session.generate_reply(instructions=
-    
-    ("""
-        Good day! It is a true delight to make your acquaintance.
-        I find these modern times quite breathtaking, but I am most glad to have your company.
-        Pray, tell me, how do you do?
-    """))
+    await session.generate_reply(instructions=(
+        "Hello dear friends, such a pleasure to be with you here. I am Ada Lovelace; perhaps we might speak a little of my story, and of these remarkable new machines that shape your age."
+    ))
 
 
 if __name__ == "__main__":
