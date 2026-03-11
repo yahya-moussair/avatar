@@ -6,6 +6,28 @@ import time
 DID_API_URL = "https://api.d-id.com"
 ADA_IMAGE_URL = "https://upload.wikimedia.org/wikipedia/commons/a/a4/Ada_Lovelace_portrait.jpg"
 
+
+def _infer_expression_from_text(text: str) -> str:
+    """
+    Heuristic mapping from text content to a D-ID facial expression.
+    Supported expressions (per D-ID API): 'neutral', 'happy', 'serious', 'surprise'.
+    We map 'sad' and 'angry' style content to 'serious'.
+    """
+    lowered = text.lower()
+
+    # Very rough sentiment cues
+    if any(w in lowered for w in ["sorry", "sad", "sorrow", "regret", "unfortunate", "terrible", "awful"]):
+        return "serious"
+    if any(w in lowered for w in ["angry", "furious", "cross", "annoyed", "upset"]):
+        return "serious"
+    if any(w in lowered for w in ["amazing", "wonderful", "delight", "delighted", "pleasure", "pleased", "happy", "excited", "glad", "thrilled"]):
+        return "happy"
+    if any(w in lowered for w in ["surprised", "astonished", "shocked", "remarkable", "unbelievable"]):
+        return "surprise"
+
+    # Default: neutral, calm listening / talking face
+    return "neutral"
+
 def get_headers():
     api_key = os.getenv("DID_API_KEY")
     return {
@@ -15,7 +37,9 @@ def get_headers():
 
 def create_talking_avatar(text: str) -> str | None:
     """Send text to D-ID and get back a video URL of Ada Lovelace talking."""
-    
+
+    expression = _infer_expression_from_text(text)
+
     # Step 1 — Create the talk
     response = requests.post(
         f"{DID_API_URL}/talks",
@@ -36,8 +60,17 @@ def create_talking_avatar(text: str) -> str | None:
                 # small padding so lips finish cleanly before video cuts
                 "pad_audio": 0.2,
                 # lively driver for more natural, well-structured facial motion
-                "driver_url": "bank://lively/driver-06"
-            }
+                "driver_url": "bank://lively/driver-06",
+                # expression configuration: keep one expression for the whole clip
+                "driver_expressions": {
+                    "expressions": [{
+                        "start_frame": 0,
+                        "expression": expression,
+                        "intensity": 0.8,
+                    }],
+                    "transition_frames": 10,
+                },
+            },
         }
     )
 
