@@ -119,6 +119,7 @@ export default function Home() {
         bandsRef={audioSceneProps.bandsRef}
         lipSyncRef={audioSceneProps.lipSyncRef}
         consumeVisemes={audioSceneProps.consumeVisemes}
+        isConnected={!!(token && serverUrl)}
       />
       {token && serverUrl ? (
         <LiveKitRoom

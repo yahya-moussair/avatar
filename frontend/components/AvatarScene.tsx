@@ -42,6 +42,7 @@ interface AvatarProps {
   bandsRef?: React.RefObject<AudioBands>;
   lipSyncRef?: React.RefObject<LipSyncState>;
   consumeVisemes?: (bandsRef: React.RefObject<AudioBands> | undefined, delta: number) => void;
+  isConnected?: boolean;
   children?: React.ReactNode;
 }
 
@@ -72,6 +73,7 @@ const MORPH_LIST = [
   "cheekSquintLeft", "cheekSquintRight", "cheekPuff",
   "noseSneerLeft", "noseSneerRight",
   "browDownLeft", "browDownRight", "browInnerUp", "browOuterUpLeft", "browOuterUpRight",
+  "eyeBlinkLeft", "eyeBlinkRight", "eyesClosed",
   "tongueOut", "jawForward",
   "viseme_aa", "viseme_E", "viseme_I", "viseme_O", "viseme_U",
   "viseme_PP", "viseme_FF", "viseme_TH", "viseme_SS",
@@ -81,7 +83,7 @@ const MORPH_LIST = [
 
 // ─── Avatar Model ───────────────────────────────────────────────────────
 
-function AvatarModel({ bandsRef, lipSyncRef, consumeVisemes }: AvatarProps) {
+function AvatarModel({ bandsRef, lipSyncRef, consumeVisemes, isConnected = false }: AvatarProps) {
   const groupRef = useRef<Group>(null);
   const gltf = useGLTF(AVATAR_PATH);
   const sceneRef = useRef(gltf.scene);
@@ -104,6 +106,35 @@ function AvatarModel({ bandsRef, lipSyncRef, consumeVisemes }: AvatarProps) {
   const allClips = [...(gltf.animations ?? []), ...(cleanedClips.current ?? [])];
   const { actions, mixer } = useAnimations(allClips, scene);
 
+  // Head gesture: only when connected; once per 60s — look right → look down → back left → center
+  const headBoneRef = useRef<THREE.Object3D | null>(null);
+  const CYCLE_DURATION = 6;
+  const COOLDOWN_SEC = 60;
+  const lastCycleEndTimeRef = useRef(-60);
+  const cyclePhaseTimeRef = useRef(0);
+  const wobbleQuatRef = useRef(new THREE.Quaternion());
+  const wobbleEulerRef = useRef(new THREE.Euler(0, 0, 0, "YXZ"));
+  const totalTimeRef = useRef(0);
+
+  useEffect(() => {
+    if (!isConnected) {
+      lastCycleEndTimeRef.current = -COOLDOWN_SEC;
+      cyclePhaseTimeRef.current = 0;
+    }
+  }, [isConnected]);
+
+  useEffect(() => {
+    headBoneRef.current = null;
+    scene.traverse((obj: THREE.Object3D) => {
+      const o = obj as THREE.Bone;
+      const isBone = o.isBone === true || (obj as any).type === "Bone";
+      if (!isBone) return;
+      if (obj.name.toLowerCase().includes("head")) {
+        headBoneRef.current = obj;
+      }
+    });
+  }, [scene]);
+
   const smoothVol = useRef(0);
   const smoothF1 = useRef(0);
   const smoothF2 = useRef(0);
@@ -111,13 +142,28 @@ function AvatarModel({ bandsRef, lipSyncRef, consumeVisemes }: AvatarProps) {
   const smoothFric = useRef(0);
   const currentWeights = useRef<Record<string, number>>({});
 
+  // Blink: every ~2–5s, quick close/open (eyesClosed or eyeBlink L+R)
+  const lifeTimeRef = useRef(0);
+  const nextBlinkTimeRef = useRef(2.5);
+  const blinkPhaseRef = useRef<0 | 1 | 2>(0);
+  const blinkPhaseTimeRef = useRef(0);
+  const BLINK_CLOSE_DUR = 0.06;
+  const BLINK_OPEN_DUR = 0.08;
+
+  // Occasional subtle smile: every ~8–15s, brief smile then fade
+  const nextSmileTimeRef = useRef(9);
+  const smilePhaseRef = useRef<0 | 1 | 2 | 3>(0);
+  const smilePhaseTimeRef = useRef(0);
+  const SMILE_FADE_IN = 0.25;
+  const SMILE_HOLD = 0.8;
+  const SMILE_FADE_OUT = 0.25;
+  const SMILE_AMOUNT = 0.14;
+
   useEffect(() => {
     if (!actions || !mixer) return;
 
-    // Stop everything first to prevent T-pose blending
     mixer.stopAllAction();
 
-    // Play the sitting animation immediately (no fade = no T-pose flash)
     if (actions["Sitting"]) {
       const action = actions["Sitting"];
       action.reset();
@@ -238,6 +284,74 @@ function AvatarModel({ bandsRef, lipSyncRef, consumeVisemes }: AvatarProps) {
       target[name] = (target[name] ?? 0) + w;
     }
 
+    // ── Blink: every few seconds, quick close then open ──
+    lifeTimeRef.current += dt;
+    const lifeTime = lifeTimeRef.current;
+    let blinkAmount = 0;
+    if (blinkPhaseRef.current === 0) {
+      if (lifeTime >= nextBlinkTimeRef.current) {
+        blinkPhaseRef.current = 1;
+        blinkPhaseTimeRef.current = 0;
+      }
+    } else if (blinkPhaseRef.current === 1) {
+      blinkPhaseTimeRef.current += dt;
+      const p = Math.min(1, blinkPhaseTimeRef.current / BLINK_CLOSE_DUR);
+      blinkAmount = p;
+      if (p >= 1) {
+        blinkPhaseRef.current = 2;
+        blinkPhaseTimeRef.current = 0;
+      }
+    } else {
+      blinkPhaseTimeRef.current += dt;
+      const p = Math.min(1, blinkPhaseTimeRef.current / BLINK_OPEN_DUR);
+      blinkAmount = 1 - p;
+      if (p >= 1) {
+        blinkPhaseRef.current = 0;
+        nextBlinkTimeRef.current = lifeTime + 2.2 + Math.random() * 2.8;
+      }
+    }
+    if (blinkAmount > 0) {
+      target.eyesClosed = (target.eyesClosed ?? 0) + blinkAmount;
+      target.eyeBlinkLeft = (target.eyeBlinkLeft ?? 0) + blinkAmount;
+      target.eyeBlinkRight = (target.eyeBlinkRight ?? 0) + blinkAmount;
+    }
+
+    // ── Occasional subtle smile: fade in, hold, fade out ──
+    let smileAmount = 0;
+    if (smilePhaseRef.current === 0) {
+      if (lifeTime >= nextSmileTimeRef.current) {
+        smilePhaseRef.current = 1;
+        smilePhaseTimeRef.current = 0;
+      }
+    } else if (smilePhaseRef.current === 1) {
+      smilePhaseTimeRef.current += dt;
+      const p = Math.min(1, smilePhaseTimeRef.current / SMILE_FADE_IN);
+      smileAmount = p * SMILE_AMOUNT;
+      if (p >= 1) {
+        smilePhaseRef.current = 2;
+        smilePhaseTimeRef.current = 0;
+      }
+    } else if (smilePhaseRef.current === 2) {
+      smilePhaseTimeRef.current += dt;
+      smileAmount = SMILE_AMOUNT;
+      if (smilePhaseTimeRef.current >= SMILE_HOLD) {
+        smilePhaseRef.current = 3;
+        smilePhaseTimeRef.current = 0;
+      }
+    } else {
+      smilePhaseTimeRef.current += dt;
+      const p = Math.min(1, smilePhaseTimeRef.current / SMILE_FADE_OUT);
+      smileAmount = (1 - p) * SMILE_AMOUNT;
+      if (p >= 1) {
+        smilePhaseRef.current = 0;
+        nextSmileTimeRef.current = lifeTime + 8 + Math.random() * 7;
+      }
+    }
+    if (smileAmount > 0) {
+      target.mouthSmileLeft = (target.mouthSmileLeft ?? 0) + smileAmount;
+      target.mouthSmileRight = (target.mouthSmileRight ?? 0) + smileAmount;
+    }
+
     // ── Step 3: Smooth towards target weights ──
     for (const name of MORPH_LIST) {
       const tv = target[name] || 0;
@@ -262,6 +376,50 @@ function AvatarModel({ bandsRef, lipSyncRef, consumeVisemes }: AvatarProps) {
         }
       }
     });
+
+    // ── Step 5: Head gesture only when connected; once every 60s: right → look down → left → center ──
+    const head = headBoneRef.current;
+    if (!head || !isConnected) return;
+
+    totalTimeRef.current += dt;
+    const now = totalTimeRef.current;
+
+    if (cyclePhaseTimeRef.current <= 0 && now - lastCycleEndTimeRef.current < COOLDOWN_SEC) return;
+
+    if (cyclePhaseTimeRef.current <= 0) {
+      cyclePhaseTimeRef.current = 0.001;
+    }
+    cyclePhaseTimeRef.current += dt;
+    const t = cyclePhaseTimeRef.current;
+
+    if (t >= CYCLE_DURATION) {
+      lastCycleEndTimeRef.current = now;
+      cyclePhaseTimeRef.current = 0;
+      return;
+    }
+
+    const yawA = 0.004;
+    const pitchA = 0.002;
+    let yaw = 0;
+    let pitch = 0;
+    if (t < 1.5) {
+      yaw = (t / 1.5) * yawA;
+    } else if (t < 2.5) {
+      yaw = yawA;
+      pitch = -((t - 1.5) / 1) * pitchA;
+    } else if (t < 4) {
+      yaw = yawA - ((t - 2.5) / 1.5) * 2 * yawA;
+      pitch = -pitchA;
+    } else if (t < 5) {
+      yaw = -yawA;
+      pitch = -pitchA + ((t - 4) / 1) * pitchA;
+    } else {
+      yaw = -yawA + ((t - 5) / 1) * yawA;
+    }
+
+    wobbleEulerRef.current.set(pitch, yaw, 0);
+    wobbleQuatRef.current.setFromEuler(wobbleEulerRef.current);
+    head.quaternion.multiply(wobbleQuatRef.current);
   });
 
   return (
@@ -572,12 +730,14 @@ export function AvatarScene({
   lipSyncRef,
   consumeVisemes,
   useFallback = false,
+  isConnected = false,
 }: {
   volume: number;
   bandsRef?: React.RefObject<AudioBands>;
   lipSyncRef?: React.RefObject<LipSyncState>;
   consumeVisemes?: (bandsRef: React.RefObject<AudioBands> | undefined, delta: number) => void;
   useFallback?: boolean;
+  isConnected?: boolean;
 }) {
   const avatarAvailable = useAvatarAvailable();
   const showGlb = !useFallback && avatarAvailable === true;
@@ -686,7 +846,7 @@ export function AvatarScene({
         <Suspense fallback={<FallbackAvatar />}>
           {showGlb ? (
             <GLBErrorBoundary volume={volume} bandsRef={bandsRef}>
-              <AvatarModel volume={volume} bandsRef={bandsRef} lipSyncRef={lipSyncRef} consumeVisemes={consumeVisemes} />
+              <AvatarModel volume={volume} bandsRef={bandsRef} lipSyncRef={lipSyncRef} consumeVisemes={consumeVisemes} isConnected={isConnected} />
             </GLBErrorBoundary>
           ) : (
             <FallbackAvatar />
