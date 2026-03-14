@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
   LiveKitRoom,
   RoomAudioRenderer,
@@ -11,17 +11,36 @@ import { ConnectionState } from "livekit-client";
 import { AvatarScene } from "@/components/AvatarScene";
 import { useRemoteAudioLevel } from "@/components/useRemoteAudioLevel";
 import { useLipSync } from "@/components/useLipSync";
+import type { AudioBands } from "@/components/useRemoteAudioLevel";
+import type { LipSyncState } from "@/components/useLipSync";
 
 const ROOM_NAME = "voice-agent-room";
 
-function RoomContent({ onDisconnect }: { onDisconnect: () => void }) {
+const DEFAULT_AUDIO_PROPS = {
+  volume: 0,
+  bandsRef: undefined as React.RefObject<AudioBands> | undefined,
+  lipSyncRef: undefined as React.RefObject<LipSyncState> | undefined,
+  consumeVisemes: undefined as ((bandsRef: React.RefObject<AudioBands> | undefined, delta: number) => void) | undefined,
+};
+
+function RoomContent({
+  onDisconnect,
+  setAudioSceneProps,
+}: {
+  onDisconnect: () => void;
+  setAudioSceneProps: (p: typeof DEFAULT_AUDIO_PROPS) => void;
+}) {
   const { volume, bandsRef } = useRemoteAudioLevel();
   const { lipSyncRef, consumeVisemes } = useLipSync();
   const remoteParticipants = useRemoteParticipants();
   const connectionState = useConnectionState();
 
-  const agentConnected = remoteParticipants.length > 0;
+  useEffect(() => {
+    setAudioSceneProps({ volume, bandsRef, lipSyncRef, consumeVisemes });
+    return () => setAudioSceneProps(DEFAULT_AUDIO_PROPS);
+  }, [volume, bandsRef, lipSyncRef, consumeVisemes, setAudioSceneProps]);
 
+  const agentConnected = remoteParticipants.length > 0;
   let statusText = "Connecting to room…";
   let statusClass = "";
 
@@ -41,7 +60,6 @@ function RoomContent({ onDisconnect }: { onDisconnect: () => void }) {
   return (
     <>
       <RoomAudioRenderer />
-      <AvatarScene volume={volume} bandsRef={bandsRef} lipSyncRef={lipSyncRef} consumeVisemes={consumeVisemes} />
       <div className={`status ${statusClass}`}>{statusText}</div>
       <div className="controls">
         <button className="btn-disconnect" onClick={onDisconnect}>
@@ -57,6 +75,7 @@ export default function Home() {
   const [serverUrl, setServerUrl] = useState<string | null>(null);
   const [status, setStatus] = useState<"idle" | "connecting" | "connected" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
+  const [audioSceneProps, setAudioSceneProps] = useState<typeof DEFAULT_AUDIO_PROPS>(DEFAULT_AUDIO_PROPS);
 
   const connect = useCallback(async () => {
     setStatus("connecting");
@@ -88,12 +107,20 @@ export default function Home() {
     setToken(null);
     setServerUrl(null);
     setStatus("idle");
+    setAudioSceneProps(DEFAULT_AUDIO_PROPS);
   }, []);
 
-  if (token && serverUrl) {
-    return (
-      <div className="app">
-        <div className="canvas-wrap" />
+  return (
+    <div className="app">
+      <div className="canvas-wrap" />
+      {/* Avatar and environment mount once and stay mounted; only audio/connection changes on Connect */}
+      <AvatarScene
+        volume={audioSceneProps.volume}
+        bandsRef={audioSceneProps.bandsRef}
+        lipSyncRef={audioSceneProps.lipSyncRef}
+        consumeVisemes={audioSceneProps.consumeVisemes}
+      />
+      {token && serverUrl ? (
         <LiveKitRoom
           serverUrl={serverUrl}
           token={token}
@@ -105,33 +132,31 @@ export default function Home() {
             setError(err.message);
             setStatus("error");
           }}
-          style={{ position: "absolute", inset: 0 }}
+          style={{ position: "absolute", inset: 0, pointerEvents: "none" }}
         >
-          <RoomContent onDisconnect={handleDisconnect} />
+          <div style={{ pointerEvents: "auto" }}>
+            <RoomContent onDisconnect={handleDisconnect} setAudioSceneProps={setAudioSceneProps} />
+          </div>
         </LiveKitRoom>
-      </div>
-    );
-  }
-
-  return (
-    <div className="app">
-      <div className="canvas-wrap" />
-      <h1 className="title">Avatar <span>·</span> Ada Lovelace</h1>
-      <div className={`status ${status === "error" ? "disconnected" : ""}`}>
-        {status === "idle" && "Click Connect to start"}
-        {status === "connecting" && "Connecting…"}
-        {status === "error" && (error || "Connection failed")}
-      </div>
-      <div className="controls">
-        <button
-          className="btn-connect"
-          onClick={connect}
-          disabled={status === "connecting"}
-        >
-          {status === "connecting" ? "Connecting…" : "Connect"}
-        </button>
-      </div>
-      <AvatarScene volume={0} />
+      ) : (
+        <>
+          <h1 className="title">Avatar <span>·</span> Ada Lovelace</h1>
+          <div className={`status ${status === "error" ? "disconnected" : ""}`}>
+            {status === "idle" && "Click Connect to start"}
+            {status === "connecting" && "Connecting…"}
+            {status === "error" && (error || "Connection failed")}
+          </div>
+          <div className="controls">
+            <button
+              className="btn-connect"
+              onClick={connect}
+              disabled={status === "connecting"}
+            >
+              {status === "connecting" ? "Connecting…" : "Connect"}
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
