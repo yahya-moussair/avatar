@@ -56,7 +56,7 @@ class GLBErrorBoundary extends Component<AvatarProps, { hasError: boolean }> {
   }
 }
 
-// ─── Frequency-driven lip sync ───────────────────────────────────────────
+// ─── Frequency-driven lip sync + expression (brows, smile, etc.) ───────────
 const MORPH_LIST = [
   "jawOpen", "mouthOpen", "mouthClose",
   "mouthLowerDownLeft", "mouthLowerDownRight",
@@ -64,12 +64,14 @@ const MORPH_LIST = [
   "mouthStretchLeft", "mouthStretchRight",
   "mouthSmileLeft", "mouthSmileRight",
   "mouthDimpleLeft", "mouthDimpleRight",
+  "mouthFrownLeft", "mouthFrownRight",
   "mouthPucker", "mouthFunnel",
   "mouthPressLeft", "mouthPressRight",
   "mouthShrugLower", "mouthShrugUpper",
   "mouthRollLower", "mouthRollUpper",
   "cheekSquintLeft", "cheekSquintRight", "cheekPuff",
   "noseSneerLeft", "noseSneerRight",
+  "browDownLeft", "browDownRight", "browInnerUp", "browOuterUpLeft", "browOuterUpRight",
   "tongueOut", "jawForward",
   "viseme_aa", "viseme_E", "viseme_I", "viseme_O", "viseme_U",
   "viseme_PP", "viseme_FF", "viseme_TH", "viseme_SS",
@@ -228,6 +230,12 @@ function AvatarModel({ bandsRef, lipSyncRef, consumeVisemes }: AvatarProps) {
           target.mouthOpen = Math.min(target.mouthOpen, 0.015);
         }
       }
+    }
+
+    // ── Add text-driven expression (brows, smile, sad, surprise, thoughtful) on top of mouth ──
+    const expr = ls?.expressionWeights ?? {};
+    for (const [name, w] of Object.entries(expr)) {
+      target[name] = (target[name] ?? 0) + w;
     }
 
     // ── Step 3: Smooth towards target weights ──

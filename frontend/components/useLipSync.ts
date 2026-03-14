@@ -20,11 +20,68 @@ interface QueuedViseme {
 export interface LipSyncState {
   /** Current morph target weights to apply (blended between visemes). */
   morphWeights: Record<string, number>;
+  /** Extra weights for brows/cheek/smile from text-driven expression (add on top of visemes). */
+  expressionWeights: Record<string, number>;
   /** True when the text-based viseme system is actively driving shapes. */
   active: boolean;
 }
 
-const EMPTY_STATE: LipSyncState = { morphWeights: {}, active: false };
+const EMPTY_STATE: LipSyncState = { morphWeights: {}, expressionWeights: {}, active: false };
+
+// ─── Text → expression (for facial expression from content) ───────────────
+
+type ExpressionKey = "neutral" | "happy" | "sad" | "surprise" | "thoughtful";
+
+const EXPRESSION_MORPH_PRESETS: Record<ExpressionKey, Record<string, number>> = {
+  neutral: {},
+  happy: {
+    browInnerUp: 0.12,
+    mouthSmileLeft: 0.28,
+    mouthSmileRight: 0.28,
+    cheekSquintLeft: 0.22,
+    cheekSquintRight: 0.22,
+  },
+  sad: {
+    browDownLeft: 0.45,
+    browDownRight: 0.45,
+    mouthFrownLeft: 0.15,
+    mouthFrownRight: 0.15,
+  },
+  surprise: {
+    browInnerUp: 0.5,
+    browOuterUpLeft: 0.35,
+    browOuterUpRight: 0.35,
+    jawOpen: 0.08,
+    mouthOpen: 0.05,
+  },
+  thoughtful: {
+    browInnerUp: 0.2,
+    browDownLeft: 0.08,
+    browDownRight: 0.08,
+    mouthPucker: 0.12,
+  },
+};
+
+function textToExpression(text: string): { expression: ExpressionKey; intensity: number } {
+  const lower = text.toLowerCase().trim();
+  if (!lower.length) return { expression: "neutral", intensity: 0 };
+
+  const sadWords = /(\bsad\b|\bsorry\b|\bsorrow\b|\bregret\b|\bunfortunate\b|\bterrible\b|\bawful\b|\bgrief\b|\bmiss\b|\blost\b)/i;
+  const angryWords = /(\bangry\b|\bfurious\b|\bcross\b|\bannoyed\b|\bupset\b)/i;
+  const happyWords = /(\bdelight\b|\bpleasure\b|\bpleased\b|\bhappy\b|\bglad\b|\bthrill\b|\bmarvellous\b|\bwonderful\b|\blovely\b|\bbrilliant\b|\bexcited\b)/i;
+  const surpriseWords = /(\bsurprised\b|\bastonished\b|\bshocked\b|\bremarkable\b|\bunbelievable\b|\bgoodness\b|\bdear me\b)/i;
+  const thoughtfulWords = /(\bsuppose\b|\breckon\b|\bconsider\b|\bperhaps\b|\bmaybe\b|\bwonder\b|\bthink\b|\bcurious\b)/i;
+
+  if (sadWords.test(lower) || angryWords.test(lower))
+    return { expression: "sad", intensity: 0.85 };
+  if (happyWords.test(lower))
+    return { expression: "happy", intensity: 0.85 };
+  if (surpriseWords.test(lower))
+    return { expression: "surprise", intensity: 0.8 };
+  if (thoughtfulWords.test(lower))
+    return { expression: "thoughtful", intensity: 0.7 };
+  return { expression: "neutral", intensity: 0 };
+}
 
 // Average phoneme rate: ~13 phonemes/sec → ~77 ms per viseme.
 // We advance through the queue when audio is detected, at this base rate.
@@ -61,6 +118,13 @@ export function useLipSync() {
   const lipSyncRef = useRef<LipSyncState>(EMPTY_STATE);
   // Track processed segment IDs to avoid duplicates
   const processedIdsRef = useRef<Set<string>>(new Set());
+  // Current expression from the text being spoken (updated per segment)
+  const currentExpressionRef = useRef<{ expression: ExpressionKey; intensity: number }>({
+    expression: "neutral",
+    intensity: 0,
+  });
+  // Smoothed expression morph weights (blended over time)
+  const smoothExpressionWeightsRef = useRef<Record<string, number>>({});
 
   // ─── Handle incoming transcription events ─────────────────────────
 
@@ -72,16 +136,17 @@ export function useLipSync() {
       for (const seg of segments) {
         // Skip already-processed segments
         if (processedIdsRef.current.has(seg.id)) {
-          // If it's a final update for an existing segment, skip
           continue;
         }
         processedIdsRef.current.add(seg.id);
 
-        // Limit the processed-IDs set to prevent memory leak
         if (processedIdsRef.current.size > 500) {
           const ids = Array.from(processedIdsRef.current);
           processedIdsRef.current = new Set(ids.slice(ids.length - 200));
         }
+
+        // Update expression from this segment's text (face adapts to what she's saying)
+        currentExpressionRef.current = textToExpression(seg.text);
 
         const visemeKeys = textToVisemes(seg.text);
         for (const vk of visemeKeys) {
@@ -170,7 +235,7 @@ export function useLipSync() {
       // ── Smooth towards target (exponential ease) ──
       const sw = smoothWeightsRef.current;
       const allKeys = Array.from(new Set([...Object.keys(targetWeights), ...Object.keys(sw)]));
-      const smoothSpeed = 22 * dt; // fast enough for speech, smooth enough for visual
+      const smoothSpeed = 22 * dt;
 
       for (const key of allKeys) {
         const target = targetWeights[key] ?? 0;
@@ -179,10 +244,28 @@ export function useLipSync() {
         if (sw[key] < 0.001) sw[key] = 0;
       }
 
+      // ── Expression: smooth toward preset for current segment's text ──
+      const { expression, intensity } = currentExpressionRef.current;
+      const exprPreset = EXPRESSION_MORPH_PRESETS[expression];
+      const exprTarget: Record<string, number> = {};
+      for (const [k, v] of Object.entries(exprPreset)) {
+        exprTarget[k] = v * intensity;
+      }
+      const sew = smoothExpressionWeightsRef.current;
+      const exprKeys = Array.from(new Set([...Object.keys(exprTarget), ...Object.keys(sew)]));
+      const exprSpeed = 8 * dt; // slower blend so expression doesn't flicker
+      for (const key of exprKeys) {
+        const target = exprTarget[key] ?? 0;
+        const current = sew[key] ?? 0;
+        sew[key] = current + (target - current) * exprSpeed;
+        if (sew[key] < 0.001) sew[key] = 0;
+      }
+
       // ── Expose state ──
       const isActive = cur !== null || queue.length > 0;
       lipSyncRef.current = {
         morphWeights: sw,
+        expressionWeights: sew,
         active: isActive,
       };
     },
