@@ -30,7 +30,7 @@ const EMPTY_STATE: LipSyncState = { morphWeights: {}, expressionWeights: {}, act
 
 // ─── Text → expression (for facial expression from content) ───────────────
 
-type ExpressionKey = "neutral" | "happy" | "sad" | "surprise" | "thoughtful";
+type ExpressionKey = "neutral" | "happy" | "sad" | "angry" | "surprise" | "thoughtful";
 
 const EXPRESSION_MORPH_PRESETS: Record<ExpressionKey, Record<string, number>> = {
   neutral: {},
@@ -46,6 +46,15 @@ const EXPRESSION_MORPH_PRESETS: Record<ExpressionKey, Record<string, number>> = 
     browDownRight: 0.45,
     mouthFrownLeft: 0.15,
     mouthFrownRight: 0.15,
+  },
+  angry: {
+    browDownLeft: 0.5,
+    browDownRight: 0.5,
+    browInnerUp: 0.05,
+    mouthFrownLeft: 0.2,
+    mouthFrownRight: 0.2,
+    mouthPressLeft: 0.1,
+    mouthPressRight: 0.1,
   },
   surprise: {
     browInnerUp: 0.5,
@@ -66,13 +75,15 @@ function textToExpression(text: string): { expression: ExpressionKey; intensity:
   const lower = text.toLowerCase().trim();
   if (!lower.length) return { expression: "neutral", intensity: 0 };
 
-  const sadWords = /(\bsad\b|\bsorry\b|\bsorrow\b|\bregret\b|\bunfortunate\b|\bterrible\b|\bawful\b|\bgrief\b|\bmiss\b|\blost\b)/i;
-  const angryWords = /(\bangry\b|\bfurious\b|\bcross\b|\bannoyed\b|\bupset\b)/i;
-  const happyWords = /(\bdelight\b|\bpleasure\b|\bpleased\b|\bhappy\b|\bglad\b|\bthrill\b|\bmarvellous\b|\bwonderful\b|\blovely\b|\bbrilliant\b|\bexcited\b)/i;
+  const sadWords = /(\bsad\b|\bsorry\b|\bsorrow\b|\bregret\b|\bunfortunate\b|\bterrible\b|\bawful\b|\bgrief\b|\bgrieves\b|\bmiss\b|\blost\b|\bdreadful\b)/i;
+  const angryWords = /(\bangry\b|\bfurious\b|\bcross\b|\bannoyed\b|\bupset\b|\bindignant\b|\bthat will not do\b|\bmust say\b)/i;
+  const happyWords = /(\bdelight\b|\bpleasure\b|\bpleased\b|\bhappy\b|\bglad\b|\bthrill\b|\bmarvellous\b|\bwonderful\b|\blovely\b|\bbrilliant\b|\bexcited\b|\bso glad\b)/i;
   const surpriseWords = /(\bsurprised\b|\bastonished\b|\bshocked\b|\bremarkable\b|\bunbelievable\b|\bgoodness\b|\bdear me\b)/i;
   const thoughtfulWords = /(\bsuppose\b|\breckon\b|\bconsider\b|\bperhaps\b|\bmaybe\b|\bwonder\b|\bthink\b|\bcurious\b)/i;
 
-  if (sadWords.test(lower) || angryWords.test(lower))
+  if (angryWords.test(lower))
+    return { expression: "angry", intensity: 0.85 };
+  if (sadWords.test(lower))
     return { expression: "sad", intensity: 0.85 };
   if (happyWords.test(lower))
     return { expression: "happy", intensity: 0.85 };

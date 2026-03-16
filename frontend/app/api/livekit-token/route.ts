@@ -45,23 +45,29 @@ export async function POST(req: NextRequest) {
     const token = await at.toJwt();
 
     // Explicitly request the voice agent to join this room (so Ada responds).
+    let dispatchWarning: string | undefined;
     const host = liveKitHost();
+    const serverUrl = process.env.NEXT_PUBLIC_LIVEKIT_URL || process.env.LIVEKIT_URL;
     const agentName = process.env.LIVEKIT_AGENT_NAME || "default";
     if (host) {
       try {
         const dispatchClient = new AgentDispatchClient(host, apiKey, apiSecret);
         const dispatch = await dispatchClient.createDispatch(room, agentName);
         console.log("Agent dispatch OK:", JSON.stringify(dispatch));
-      } catch (dispatchErr: any) {
-        console.error("AGENT DISPATCH FAILED:", dispatchErr?.message || dispatchErr);
+      } catch (dispatchErr: unknown) {
+        const msg = dispatchErr instanceof Error ? dispatchErr.message : String(dispatchErr);
+        console.error("AGENT DISPATCH FAILED:", msg);
+        dispatchWarning = "Agent may not join. Is the voice agent worker running? (See README troubleshooting.)";
       }
     } else {
       console.error("NO LIVEKIT HOST — cannot dispatch agent");
+      dispatchWarning = "LiveKit URL not set; agent will not be dispatched.";
     }
 
     return NextResponse.json({
       token,
-      serverUrl: process.env.NEXT_PUBLIC_LIVEKIT_URL || process.env.LIVEKIT_URL,
+      serverUrl: serverUrl ?? null,
+      ...(dispatchWarning && { dispatchWarning }),
     });
   } catch (e) {
     console.error("Token error:", e);

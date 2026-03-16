@@ -26,9 +26,11 @@ const DEFAULT_AUDIO_PROPS = {
 function RoomContent({
   onDisconnect,
   setAudioSceneProps,
+  dispatchWarning,
 }: {
   onDisconnect: () => void;
   setAudioSceneProps: (p: typeof DEFAULT_AUDIO_PROPS) => void;
+  dispatchWarning: string | null;
 }) {
   const { volume, bandsRef } = useRemoteAudioLevel();
   const { lipSyncRef, consumeVisemes } = useLipSync();
@@ -46,10 +48,10 @@ function RoomContent({
 
   if (connectionState === ConnectionState.Connected) {
     if (agentConnected) {
-      statusText = "Connected — speak to Ada";
+      statusText = "Connected — speak to Ada (allow microphone if prompted)";
       statusClass = "connected";
     } else {
-      statusText = "Waiting for Ada to join…";
+      statusText = "Waiting for Ada to join… (start the agent worker if you haven’t)";
       statusClass = "waiting";
     }
   } else if (connectionState === ConnectionState.Disconnected) {
@@ -61,6 +63,11 @@ function RoomContent({
     <>
       <RoomAudioRenderer />
       <div className={`status ${statusClass}`}>{statusText}</div>
+      {dispatchWarning && (
+        <div className="status waiting" style={{ marginTop: "0.25rem", fontSize: "0.85rem" }}>
+          {dispatchWarning}
+        </div>
+      )}
       <div className="controls">
         <button className="btn-disconnect" onClick={onDisconnect}>
           Disconnect
@@ -75,6 +82,7 @@ export default function Home() {
   const [serverUrl, setServerUrl] = useState<string | null>(null);
   const [status, setStatus] = useState<"idle" | "connecting" | "connected" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
+  const [dispatchWarning, setDispatchWarning] = useState<string | null>(null);
   const [audioSceneProps, setAudioSceneProps] = useState<typeof DEFAULT_AUDIO_PROPS>(DEFAULT_AUDIO_PROPS);
 
   const connect = useCallback(async () => {
@@ -94,8 +102,12 @@ export default function Home() {
         throw new Error(data.error || `HTTP ${res.status}`);
       }
       const data = await res.json();
+      if (data.serverUrl == null) {
+        throw new Error("Server URL not configured. Set LIVEKIT_URL or NEXT_PUBLIC_LIVEKIT_URL.");
+      }
       setToken(data.token);
       setServerUrl(data.serverUrl);
+      setDispatchWarning(data.dispatchWarning ?? null);
       setStatus("connected");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to get token");
@@ -107,6 +119,7 @@ export default function Home() {
     setToken(null);
     setServerUrl(null);
     setStatus("idle");
+    setDispatchWarning(null);
     setAudioSceneProps(DEFAULT_AUDIO_PROPS);
   }, []);
 
@@ -136,7 +149,7 @@ export default function Home() {
           style={{ position: "absolute", inset: 0, pointerEvents: "none" }}
         >
           <div style={{ pointerEvents: "auto" }}>
-            <RoomContent onDisconnect={handleDisconnect} setAudioSceneProps={setAudioSceneProps} />
+            <RoomContent onDisconnect={handleDisconnect} setAudioSceneProps={setAudioSceneProps} dispatchWarning={dispatchWarning} />
           </div>
         </LiveKitRoom>
       ) : (
