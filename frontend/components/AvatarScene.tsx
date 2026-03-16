@@ -157,7 +157,7 @@ function AvatarModel({ bandsRef, lipSyncRef, consumeVisemes, isConnected = false
   const SMILE_FADE_IN = 0.25;
   const SMILE_HOLD = 0.8;
   const SMILE_FADE_OUT = 0.25;
-  const SMILE_AMOUNT = 0.14;
+  const SMILE_AMOUNT = 0.22;
 
   useEffect(() => {
     if (!actions || !mixer) return;
@@ -211,70 +211,42 @@ function AvatarModel({ bandsRef, lipSyncRef, consumeVisemes, isConnected = false
         target[name] = mw[name] ?? 0;
       }
     } else {
-      // ── Fallback: frequency-based lip sync ──
+      // ── Fallback: gentle frequency-based lip sync ──
+      // When we have no viseme data, drive a simple jaw + basic vowel shapes
+      // so the mouth still moves, but keep it subtle.
       const vol = smoothVol.current;
       const f1 = smoothF1.current;
       const f2 = smoothF2.current;
-      const sib = smoothSib.current;
-      const fric = smoothFric.current;
-      const speakGate = Math.min(1, Math.max(0, (vol - 0.008) * 5));
+      const speakGate = Math.min(1, Math.max(0, (vol - 0.01) * 4));
 
       if (speakGate > 0) {
-        const intensity = Math.min(1, vol * 1.6) * speakGate;
+        const intensity = Math.min(1, vol * 1.4) * speakGate;
 
         const jaw = Math.min(1, f1 * 2.0) * intensity;
-        target.jawOpen = jaw * 0.3;
-        target.mouthOpen = jaw * 0.2;
-        target.mouthLowerDownLeft = jaw * 0.12;
-        target.mouthLowerDownRight = jaw * 0.12;
-        target.mouthUpperUpLeft = jaw * 0.04;
-        target.mouthUpperUpRight = jaw * 0.04;
+        target.jawOpen = jaw * 0.26;
+        target.mouthOpen = jaw * 0.18;
+        target.mouthLowerDownLeft = jaw * 0.10;
+        target.mouthLowerDownRight = jaw * 0.10;
 
-        const spread = Math.min(1, f2 * 2.5) * intensity;
-        target.mouthStretchLeft = spread * 0.35;
-        target.mouthStretchRight = spread * 0.35;
-        target.mouthSmileLeft = spread * 0.15;
-        target.mouthSmileRight = spread * 0.15;
-        target.mouthDimpleLeft = spread * 0.06;
-        target.mouthDimpleRight = spread * 0.06;
+        const spread = Math.min(1, f2 * 2.3) * intensity;
+        target.mouthStretchLeft = spread * 0.28;
+        target.mouthStretchRight = spread * 0.28;
 
-        const round = Math.max(0, 1 - f2 * 2.5) * Math.min(1, f1 * 2.0) * intensity;
-        target.mouthPucker = round * 0.45;
-        target.mouthFunnel = round * 0.35;
-
-        const sibAmt = Math.min(1, sib * 2.5) * intensity;
-        target.mouthClose = sibAmt * 0.15;
-        target.mouthShrugLower = sibAmt * 0.06;
-
-        const fricAmt = Math.min(1, fric * 2.5) * intensity;
-        target.mouthRollLower = fricAmt * 0.18;
-
-        target.cheekSquintLeft = jaw * 0.02;
-        target.cheekSquintRight = jaw * 0.02;
+        const round = Math.max(0, 1 - f2 * 2.8) * Math.min(1, f1 * 2.0) * intensity;
+        target.mouthPucker = round * 0.32;
+        target.mouthFunnel = round * 0.26;
 
         const vAA = Math.max(0, f1 - 0.12) * Math.max(0, 1 - f2 * 3.0) * intensity;
         const vI  = Math.max(0, f2 - 0.12) * Math.max(0, 1 - f1 * 3.0) * intensity;
         const vE  = Math.min(Math.max(0, f2 - 0.06), Math.max(0, f1 - 0.06)) * intensity;
-        const vO  = Math.max(0, f1 - 0.06) * Math.max(0, 1 - f2 * 3.5) * round;
+        const vO  = Math.max(0, f1 - 0.06) * Math.max(0, 1 - f2 * 3.2) * round;
         const vU  = round * Math.max(0, 1 - jaw * 2.0);
 
-        target.viseme_aa = vAA * 0.55;
-        target.viseme_I  = vI  * 0.50;
-        target.viseme_E  = vE  * 0.40;
-        target.viseme_O  = vO  * 0.55;
-        target.viseme_U  = vU  * 0.45;
-        target.viseme_SS = sibAmt * 0.30;
-        target.viseme_FF = fricAmt * 0.30;
-
-        if (f1 < 0.07 && f2 < 0.07 && sib < 0.05 && fric < 0.05 && vol > 0.02) {
-          const closedAmt = intensity * 0.45;
-          target.viseme_nn = closedAmt * 0.25;
-          target.viseme_PP = closedAmt * 0.20;
-          target.mouthPressLeft = closedAmt * 0.15;
-          target.mouthPressRight = closedAmt * 0.15;
-          target.jawOpen = Math.min(target.jawOpen, 0.03);
-          target.mouthOpen = Math.min(target.mouthOpen, 0.015);
-        }
+        target.viseme_aa = vAA * 0.5;
+        target.viseme_I  = vI  * 0.45;
+        target.viseme_E  = vE  * 0.38;
+        target.viseme_O  = vO  * 0.5;
+        target.viseme_U  = vU  * 0.42;
       }
     }
 
@@ -377,49 +349,10 @@ function AvatarModel({ bandsRef, lipSyncRef, consumeVisemes, isConnected = false
       }
     });
 
-    // ── Step 5: Head gesture only when connected; once every 60s: right → look down → left → center ──
-    const head = headBoneRef.current;
-    if (!head || !isConnected) return;
-
-    totalTimeRef.current += dt;
-    const now = totalTimeRef.current;
-
-    if (cyclePhaseTimeRef.current <= 0 && now - lastCycleEndTimeRef.current < COOLDOWN_SEC) return;
-
-    if (cyclePhaseTimeRef.current <= 0) {
-      cyclePhaseTimeRef.current = 0.001;
-    }
-    cyclePhaseTimeRef.current += dt;
-    const t = cyclePhaseTimeRef.current;
-
-    if (t >= CYCLE_DURATION) {
-      lastCycleEndTimeRef.current = now;
-      cyclePhaseTimeRef.current = 0;
-      return;
-    }
-
-    const yawA = 0.004;
-    const pitchA = 0.002;
-    let yaw = 0;
-    let pitch = 0;
-    if (t < 1.5) {
-      yaw = (t / 1.5) * yawA;
-    } else if (t < 2.5) {
-      yaw = yawA;
-      pitch = -((t - 1.5) / 1) * pitchA;
-    } else if (t < 4) {
-      yaw = yawA - ((t - 2.5) / 1.5) * 2 * yawA;
-      pitch = -pitchA;
-    } else if (t < 5) {
-      yaw = -yawA;
-      pitch = -pitchA + ((t - 4) / 1) * pitchA;
-    } else {
-      yaw = -yawA + ((t - 5) / 1) * yawA;
-    }
-
-    wobbleEulerRef.current.set(pitch, yaw, 0);
-    wobbleQuatRef.current.setFromEuler(wobbleEulerRef.current);
-    head.quaternion.multiply(wobbleQuatRef.current);
+    // ── Step 5: (disabled) Head gesture ──
+    // The previous head wobble sometimes pushed the head into unnatural poses.
+    // For now we rely entirely on the sitting animation so the head stays neutral and stable.
+    return;
   });
 
   return (

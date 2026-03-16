@@ -35,11 +35,11 @@ type ExpressionKey = "neutral" | "happy" | "sad" | "angry" | "surprise" | "thoug
 const EXPRESSION_MORPH_PRESETS: Record<ExpressionKey, Record<string, number>> = {
   neutral: {},
   happy: {
-    browInnerUp: 0.12,
-    mouthSmileLeft: 0.28,
-    mouthSmileRight: 0.28,
-    cheekSquintLeft: 0.22,
-    cheekSquintRight: 0.22,
+    browInnerUp: 0.15,
+    mouthSmileLeft: 0.42,
+    mouthSmileRight: 0.42,
+    cheekSquintLeft: 0.3,
+    cheekSquintRight: 0.3,
   },
   sad: {
     browDownLeft: 0.45,
@@ -96,7 +96,8 @@ function textToExpression(text: string): { expression: ExpressionKey; intensity:
 
 // Average phoneme rate: ~13 phonemes/sec → ~77 ms per viseme.
 // We advance through the queue when audio is detected, at this base rate.
-const BASE_VISEME_DURATION_MS = 75;
+// Slightly longer per-viseme duration so each mouth shape is clearer.
+const BASE_VISEME_DURATION_MS = 90;
 // Minimum volume to consider the avatar "speaking"
 const SPEAK_THRESHOLD = 0.012;
 
@@ -219,8 +220,8 @@ export function useLipSync() {
 
       // ── Crossfade blend progress ──
       if (blendRef.current < 1) {
-        // Fast blend: reach full weight in ~60ms
-        blendRef.current = Math.min(1, blendRef.current + dt * 16);
+        // Slightly slower blend so each mouth shape reads clearly (~80–100ms)
+        blendRef.current = Math.min(1, blendRef.current + dt * 12);
       }
 
       // ── Compute target weights ──
