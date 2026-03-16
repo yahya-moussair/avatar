@@ -9,7 +9,7 @@ import type { Group } from "three";
 import type { AudioBands } from "./useRemoteAudioLevel";
 import type { LipSyncState } from "./useLipSync";
 
-const AVATAR_PATH = "/avatars/avatar.glb";
+const AVATAR_PATH = "/avatars/model.glb";
 const ENVIRONMENT_PATH = "/environments/silent_hill-library.glb";
 const SITTING_ANIM_PATH = "/animations/sitting.fbx";
 const ENGINE_PATH = "/environments/analytical_engine.glb";
@@ -18,6 +18,7 @@ const LOOM_PATH = "/environments/mechanical_loom.glb";
 const ADA_CADRE_PATH = "/environments/ada_cadre.glb";
 
 useGLTF.preload(ENVIRONMENT_PATH);
+useGLTF.preload(AVATAR_PATH);
 useGLTF.preload(ENGINE_PATH);
 useGLTF.preload(BRASS_MACHINE_PATH);
 useGLTF.preload(LOOM_PATH);
@@ -356,7 +357,7 @@ function AvatarModel({ bandsRef, lipSyncRef, consumeVisemes, isConnected = false
   });
 
   return (
-    <group ref={groupRef} scale={2.2} position={[-1.4, 0.1, -0.8]}>
+    <group ref={groupRef} scale={2.5} position={[-1.8, 0.1, -0.8]}>
       <primitive object={scene} />
     </group>
   );
