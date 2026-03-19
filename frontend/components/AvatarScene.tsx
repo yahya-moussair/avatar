@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect, useState, Suspense, Component } from "react";
+import { useRef, useEffect, useState, useMemo, Suspense, Component } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { useGLTF, useFBX, useAnimations, Environment, ContactShadows, OrbitControls, Sparkles } from "@react-three/drei";
 import { EffectComposer, Bloom, Vignette } from "@react-three/postprocessing";
@@ -9,9 +9,11 @@ import type { Group } from "three";
 import type { AudioBands } from "./useRemoteAudioLevel";
 import type { LipSyncState } from "./useLipSync";
 
-const AVATAR_PATH = "/avatars/model.glb";
+const AVATAR_PATH = "/avatars/avtarr.glb";
 const ENVIRONMENT_PATH = "/environments/silent_hill-library.glb";
-const SITTING_ANIM_PATH = "/animations/sitting.fbx";
+// Encode filename so spaces/parentheses load reliably from /public
+const SITTING_ANIM_PATH =
+  "/animations/" + encodeURIComponent("Sitting Talking (1).fbx");
 const ENGINE_PATH = "/environments/analytical_engine.glb";
 const BRASS_MACHINE_PATH = "/environments/brass_machine.glb";
 const LOOM_PATH = "/environments/mechanical_loom.glb";
@@ -82,6 +84,107 @@ const MORPH_LIST = [
   "viseme_sil", "viseme_CH", "viseme_kk",
 ];
 
+/** All bone names from skinned meshes under root (for FBX → GLB retargeting). */
+function collectSkinnedBoneNames(root: THREE.Object3D): Set<string> {
+  const names = new Set<string>();
+  root.traverse((obj) => {
+    const m = obj as THREE.SkinnedMesh;
+    if (m.isSkinnedMesh && m.skeleton?.bones) {
+      for (const b of m.skeleton.bones) names.add(b.name);
+    }
+  });
+  return names;
+}
+
+const normBoneKey = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+function resolveBoneTrackName(
+  nodeName: string,
+  boneNames: Set<string>,
+  canonicalByLower: Map<string, string>,
+  fuzzyByNorm: Map<string, string>
+): string | null {
+  if (boneNames.has(nodeName)) return nodeName;
+  const byLower = canonicalByLower.get(nodeName.toLowerCase());
+  if (byLower) return byLower;
+
+  const noMix = nodeName
+    .replace(/^mixamorig:/i, "")
+    .replace(/^mixamorig_/i, "")
+    .replace(/^mixamorig/i, "");
+  if (boneNames.has(noMix)) return noMix;
+  const noMixL = canonicalByLower.get(noMix.toLowerCase());
+  if (noMixL) return noMixL;
+
+  const last = nodeName.split(/[:|]/).pop() ?? nodeName;
+  if (boneNames.has(last)) return last;
+  const lastL = canonicalByLower.get(last.toLowerCase());
+  if (lastL) return lastL;
+
+  const fuzzy = fuzzyByNorm.get(normBoneKey(nodeName));
+  if (fuzzy) return fuzzy;
+
+  return null;
+}
+
+/**
+ * Clone FBX clip and rename tracks to match this GLB's bone names so the mixer can apply it.
+ * Drops Hips/root position tracks to avoid sliding; keeps rotation so the body stays seated.
+ */
+function retargetSittingClipFromFbx(
+  sourceClip: THREE.AnimationClip,
+  avatarRoot: THREE.Object3D
+): THREE.AnimationClip {
+  const clip = sourceClip.clone();
+  clip.name = "Sitting";
+  const boneNames = collectSkinnedBoneNames(avatarRoot);
+  const canonicalByLower = new Map<string, string>();
+  const fuzzyByNorm = new Map<string, string>();
+  for (const n of Array.from(boneNames)) {
+    canonicalByLower.set(n.toLowerCase(), n);
+    const nk = normBoneKey(n);
+    if (!fuzzyByNorm.has(nk)) fuzzyByNorm.set(nk, n);
+  }
+
+  const out: THREE.KeyframeTrack[] = [];
+  for (const track of clip.tracks) {
+    const dot = track.name.indexOf(".");
+    if (dot === -1) continue;
+    const nodePart = track.name.slice(0, dot);
+    const propPart = track.name.slice(dot);
+    const resolved = resolveBoneTrackName(
+      nodePart,
+      boneNames,
+      canonicalByLower,
+      fuzzyByNorm
+    );
+    if (!resolved) continue;
+    track.name = resolved + propPart;
+    out.push(track);
+  }
+
+  clip.tracks = out.filter((track) => {
+    const [bone, ...rest] = track.name.split(".");
+    const prop = rest.join(".");
+    const lbone = bone.toLowerCase();
+    // Only strip root translation — not LeftHip / RightHip etc.
+    const isRootPos =
+      prop === "position" &&
+      (lbone === "hips" ||
+        lbone === "mixamorighips" ||
+        lbone === "pelvis" ||
+        lbone === "root" ||
+        lbone === "armature" ||
+        lbone === "cc_base_bone001" ||
+        lbone === "cc_base_bone");
+    if (isRootPos) return false;
+    return true;
+  });
+
+  clip.resetDuration();
+  return clip;
+}
+
 // ─── Avatar Model ───────────────────────────────────────────────────────
 
 function AvatarModel({ bandsRef, lipSyncRef, consumeVisemes, isConnected = false }: AvatarProps) {
@@ -90,21 +193,40 @@ function AvatarModel({ bandsRef, lipSyncRef, consumeVisemes, isConnected = false
   const sceneRef = useRef(gltf.scene);
   const scene = sceneRef.current;
 
-  // Load the sitting animation from FBX and clean it up once
   const sittingFbx = useFBX(SITTING_ANIM_PATH);
-  const cleanedClips = useRef<THREE.AnimationClip[] | null>(null);
-  if (!cleanedClips.current && sittingFbx.animations.length > 0) {
-    const clip = sittingFbx.animations[0];
-    clip.name = "Sitting";
-    // Remove position tracks to prevent root motion / jumping
-    clip.tracks = clip.tracks.filter(
-      (track) => !track.name.endsWith(".position")
-    );
-    cleanedClips.current = [clip];
-  }
 
-  // Merge sitting animation with any existing avatar animations
-  const allClips = [...(gltf.animations ?? []), ...(cleanedClips.current ?? [])];
+  // Stable clip list: new [] every render was resetting drei's mixer → T-pose
+  const sittingClip = useMemo(() => {
+    if (!sittingFbx.animations.length) return null;
+    try {
+      const retargeted = retargetSittingClipFromFbx(sittingFbx.animations[0], scene);
+      const matched = retargeted.tracks.length;
+      console.info(
+        "[Avatar] Sitting clip retargeted:",
+        retargeted.name,
+        "tracks:",
+        matched,
+        "bones on avatar:",
+        collectSkinnedBoneNames(scene).size
+      );
+      if (matched === 0) {
+        console.warn(
+          "[Avatar] No animation tracks matched GLB bones — check FBX rig vs avatar GLB naming."
+        );
+      }
+      return retargeted;
+    } catch (e) {
+      console.error("[Avatar] Failed to retarget sitting clip", e);
+      return null;
+    }
+  }, [sittingFbx, scene]);
+
+  const allClips = useMemo(() => {
+    const fromGltf = [...(gltf.animations ?? [])];
+    if (sittingClip) fromGltf.push(sittingClip);
+    return fromGltf;
+  }, [gltf.animations, sittingClip]);
+
   const { actions, mixer } = useAnimations(allClips, scene);
 
   // Head gesture: only when connected; once per 60s — look right → look down → back left → center
@@ -356,8 +478,9 @@ function AvatarModel({ bandsRef, lipSyncRef, consumeVisemes, isConnected = false
     return;
   });
 
+  // World placement: seated behind desk, feet near floor (tune if env scale changes)
   return (
-    <group ref={groupRef} scale={2.5} position={[-1.8, 0.1, -0.8]}>
+    <group ref={groupRef} scale={2.35} position={[-1.65, -0.95, -0.2]}>
       <primitive object={scene} />
     </group>
   );
