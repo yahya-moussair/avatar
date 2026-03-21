@@ -11,6 +11,7 @@ import { ConnectionState } from "livekit-client";
 import { AvatarScene } from "@/components/AvatarScene";
 import { useRemoteAudioLevel } from "@/components/useRemoteAudioLevel";
 import { useLipSync } from "@/components/useLipSync";
+import { useAgentSubtitles } from "@/components/useAgentSubtitles";
 import type { AudioBands } from "@/components/useRemoteAudioLevel";
 import type { LipSyncState } from "@/components/useLipSync";
 
@@ -34,6 +35,7 @@ function RoomContent({
 }) {
   const { volume, bandsRef } = useRemoteAudioLevel();
   const { lipSyncRef, consumeVisemes } = useLipSync();
+  const agentSubtitle = useAgentSubtitles();
   const remoteParticipants = useRemoteParticipants();
   const connectionState = useConnectionState();
 
@@ -62,6 +64,12 @@ function RoomContent({
   return (
     <>
       <RoomAudioRenderer />
+      {agentSubtitle ? (
+        <div className="ai-subtitles" role="status" aria-live="polite">
+          <span className="ai-subtitles-label">Ada</span>
+          <p className="ai-subtitles-text">{agentSubtitle}</p>
+        </div>
+      ) : null}
       <div className={`status ${statusClass}`}>{statusText}</div>
       {dispatchWarning && (
         <div className="status waiting" style={{ marginTop: "0.25rem", fontSize: "0.85rem" }}>

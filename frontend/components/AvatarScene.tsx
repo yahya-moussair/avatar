@@ -11,13 +11,19 @@ import type { LipSyncState } from "./useLipSync";
 
 const AVATAR_PATH = "/avatars/avtarr.glb";
 const ENVIRONMENT_PATH = "/environments/silent_hill-library.glb";
-// Encode filename so spaces/parentheses load reliably from /public
-const SITTING_ANIM_PATH =
-  "/animations/" + encodeURIComponent("Sitting Talking (1).fbx");
+const SITTING_ANIM_PATH = "/animations/sitting.fbx";
 const ENGINE_PATH = "/environments/analytical_engine.glb";
 const BRASS_MACHINE_PATH = "/environments/brass_machine.glb";
 const LOOM_PATH = "/environments/mechanical_loom.glb";
 const ADA_CADRE_PATH = "/environments/ada_cadre.glb";
+
+/** Chair behind the desk (deeper −Z than the desktop). Tune if you change env/avatar. */
+const AVATAR_WORLD = {
+  position: [-1.9, -1.8, -3.2] as [number, number, number],
+  rotation: [0, 0.42, 0] as [number, number, number],
+  scale: 2.15,
+};
+const AVATAR_SHADOW_FLOOR_Y = -1.19;
 
 useGLTF.preload(ENVIRONMENT_PATH);
 useGLTF.preload(AVATAR_PATH);
@@ -127,9 +133,21 @@ function resolveBoneTrackName(
   return null;
 }
 
+function isRootRetargetBone(lbone: string): boolean {
+  return (
+    lbone === "hips" ||
+    lbone === "mixamorighips" ||
+    lbone === "pelvis" ||
+    lbone === "root" ||
+    lbone === "armature" ||
+    lbone === "cc_base_bone001" ||
+    lbone === "cc_base_bone"
+  );
+}
+
 /**
  * Clone FBX clip and rename tracks to match this GLB's bone names so the mixer can apply it.
- * Drops Hips/root position tracks to avoid sliding; keeps rotation so the body stays seated.
+ * Strips root position (no slide) and root rotation (bad retarget often folds the torso through props).
  */
 function retargetSittingClipFromFbx(
   sourceClip: THREE.AnimationClip,
@@ -167,17 +185,10 @@ function retargetSittingClipFromFbx(
     const [bone, ...rest] = track.name.split(".");
     const prop = rest.join(".");
     const lbone = bone.toLowerCase();
-    // Only strip root translation — not LeftHip / RightHip etc.
-    const isRootPos =
-      prop === "position" &&
-      (lbone === "hips" ||
-        lbone === "mixamorighips" ||
-        lbone === "pelvis" ||
-        lbone === "root" ||
-        lbone === "armature" ||
-        lbone === "cc_base_bone001" ||
-        lbone === "cc_base_bone");
-    if (isRootPos) return false;
+    if (!isRootRetargetBone(lbone)) return true;
+    if (prop === "position") return false;
+    if (prop === "quaternion") return false;
+    if (prop === "rotation" || prop.startsWith("rotation[")) return false;
     return true;
   });
 
@@ -478,9 +489,13 @@ function AvatarModel({ bandsRef, lipSyncRef, consumeVisemes, isConnected = false
     return;
   });
 
-  // World placement: seated behind desk, feet near floor (tune if env scale changes)
   return (
-    <group ref={groupRef} scale={2.35} position={[-1.65, -0.95, -0.2]}>
+    <group
+      ref={groupRef}
+      position={AVATAR_WORLD.position}
+      rotation={AVATAR_WORLD.rotation}
+      scale={AVATAR_WORLD.scale}
+    >
       <primitive object={scene} />
     </group>
   );
@@ -856,7 +871,7 @@ export function AvatarScene({
 
         {/* Camera controls — inside the library looking at avatar */}
         <OrbitControls
-          target={[-0.5, 0.3, -1.5]}
+          target={[-0.28, 0.25, -1.46]}
           enableDamping
           dampingFactor={0.12}
           minDistance={1.5}
@@ -923,7 +938,11 @@ export function AvatarScene({
 
         {/* Contact shadow under avatar */}
         <ContactShadows
-          position={[-1, -1.19, -1.9]}
+          position={[
+            AVATAR_WORLD.position[0],
+            AVATAR_SHADOW_FLOOR_Y,
+            AVATAR_WORLD.position[2] - 0.22,
+          ]}
           opacity={0.5}
           scale={10}
           blur={2.5}

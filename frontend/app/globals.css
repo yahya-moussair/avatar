@@ -109,3 +109,39 @@ html, body {
 .title span {
   color: #C5A55A;
 }
+
+/* Agent response as subtitles (sous-titres) */
+.ai-subtitles {
+  position: absolute;
+  left: 50%;
+  bottom: 5.5rem;
+  transform: translateX(-50%);
+  max-width: min(92vw, 42rem);
+  z-index: 11;
+  padding: 0.65rem 1rem 0.75rem;
+  border-radius: 0.75rem;
+  background: rgba(0, 0, 0, 0.72);
+  border: 1px solid rgba(197, 165, 90, 0.35);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+}
+
+.ai-subtitles-label {
+  display: block;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #C5A55A;
+  margin-bottom: 0.35rem;
+  opacity: 0.9;
+}
+
+.ai-subtitles-text {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.45;
+  color: #f5ecd8;
+  text-align: center;
+  text-wrap: balance;
+}
