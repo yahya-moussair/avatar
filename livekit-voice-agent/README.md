@@ -1,5 +1,7 @@
 # LiveKit voice agent (Ada Lovelace)
 
+Ada is configured for **English and French**: Deepgram `nova-3` with `language="multi"` for recognition, Eleven Turbo v2.5 for TTS (no fixed locale), and prompts in `agent.py` / `graph.py` that require idiomatic French when the user speaks French.
+
 ## Environment (.env.local)
 
 | Variable | Purpose |
