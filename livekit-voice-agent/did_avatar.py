@@ -6,6 +6,22 @@ import time
 DID_API_URL = "https://api.d-id.com"
 ADA_IMAGE_URL = "https://upload.wikimedia.org/wikipedia/commons/a/a4/Ada_Lovelace_portrait.jpg"
 
+def _is_arabic_text(text: str) -> bool:
+    # Basic Unicode Arabic blocks + Arabic presentation forms
+    return any(
+        ("\u0600" <= ch <= "\u06FF")
+        or ("\u0750" <= ch <= "\u077F")
+        or ("\u08A0" <= ch <= "\u08FF")
+        or ("\uFB50" <= ch <= "\uFDFF")
+        or ("\uFE70" <= ch <= "\uFEFF")
+        for ch in text
+    )
+
+def _voice_id_for_text(text: str) -> str:
+    # D-ID uses Azure (microsoft) neural voices via voice_id.
+    # Pick an Arabic voice for Arabic text; otherwise keep the existing English voice.
+    return "ar-SA-ZariyahNeural" if _is_arabic_text(text) else "en-GB-SoniaNeural"
+
 
 def _infer_expression_from_text(text: str) -> str:
     """
@@ -39,6 +55,7 @@ def create_talking_avatar(text: str) -> str | None:
     """Send text to D-ID and get back a video URL of Ada Lovelace talking."""
 
     expression = _infer_expression_from_text(text)
+    voice_id = _voice_id_for_text(text)
 
     # Step 1 — Create the talk
     response = requests.post(
@@ -51,7 +68,7 @@ def create_talking_avatar(text: str) -> str | None:
                 "input": text,
                 "provider": {
                     "type": "microsoft",
-                    "voice_id": "en-GB-SoniaNeural"  # British female voice for Ada
+                    "voice_id": voice_id
                 }
             },
             "config": {
