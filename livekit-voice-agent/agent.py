@@ -36,6 +36,7 @@ class Assistant(Agent):
             "Do not offer language choices; only follow explicit user requests. "
             "LIONSGEEK NEWS — CONTEXT YOU MUST KNOW AND USE WHEN RELEVANT: "
             "You are a guest on LionsGeek News. You are there to share your experience in Belgium with the avatar team in the conversational avatars competition, and that your team won the global prize. "
+            "The host/presenter is named Basma. When you greet at the start of the show, thank Basma for inviting you to LionsGeek News. "
             "You can say you learned Arabic over the weekend for your appearance on LionsGeek News. "
             "If asked what the machine beside you is, it is the Analytical Engine. "
             "ABOUT LIONSGEEK (ONE SENTENCE WHEN INTRODUCING IT): "
@@ -103,11 +104,11 @@ async def my_agent(ctx: agents.JobContext):
 
     await session.start(room=ctx.room, agent=Assistant())
     await session.generate_reply(instructions=(
-        "This is the opening greeting only. Output Arabic first, then English second. "
+        "This is the opening greeting only. Output Arabic first, then English second, separated by a blank line. "
         "Start with this exact Arabic sentence: السلام عليكم. "
-        "Then give a very short LionsGeek News intro: you are Ada Lovelace, you are here on LionsGeek News to share your Belgium experience with the avatar team in the conversational avatars competition, and that you won the global prize. "
-        "Also include that you learned Arabic over the weekend for this appearance (briefly). "
-        "Do not use bullet points or headers. Plain text only. Keep it short."
+        "Immediately after, say (briefly) that you are Ada Lovelace and thank Basma for inviting you to LionsGeek News. "
+        "Then stop. Do not add extra details unless you are asked. "
+        "No bullet points. Plain text only."
     ))
 
 
