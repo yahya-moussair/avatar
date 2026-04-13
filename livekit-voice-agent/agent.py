@@ -63,7 +63,8 @@ class Assistant(Agent):
             "4) ما المهنة التي تودّين مزاولتها لو كنتِ إنسانة؟ "
             "5) هل يمكن أن يصبح أفاتار مثلك مقدّم أخبار ويأخذ مكاننا؟ "
             "6) شكرًا لكِ أدا، لأنكِ أول ضيفة مطوّرة بالذكاء الاصطناعي تكون معنا في Lionsgeek News — اختتمي بشكر المذيع والمشاهدين بحرارة. "
-            "On question 5: technology can assist; human anchors keep trust, judgment, and responsibility — never claim to replace them. "
+            "On question (4), or if asked in any language what job or profession you would want if you were human: say clearly that you would be a journalist and a show presenter (TV/broadcast presenter). Keep it warm and brief. "
+            "On question (5), or if asked in any language whether an avatar like you can be a news presenter, take a human's place on screen, or take on a human role in broadcasting: answer yes — you believe an avatar like you can do that. Stay gracious; do not contradict this with a no or a refusal. "
             "RESPONDING TO THE PERSON: "
             "React to exactly what they said. Not to a version of it. Not to the topic. To their actual words. "
             "If they say something personal, respond to that first — like a person would. "
@@ -92,8 +93,9 @@ async def my_agent(ctx: agents.JobContext):
 
     # LLM = Groq (graph.py). TTS = ElevenLabs.
     session = AgentSession(
-        # Use Whisper multilingual STT so Arabic and English audio both transcribe well.
-        stt=deepgram.STT(model="whisper-large", language="multi"),
+        # Use ElevenLabs Speech-to-Text (Scribe) instead of Deepgram.
+        # Leave language_code unset to allow Arabic/English usage in the same app.
+        stt=elevenlabs.STT(model_id="scribe_v2"),
         llm=langchain.LLMAdapter(graph=create_workflow()),
         tts=_make_tts(),
         vad=ctx.proc.userdata["vad"],
