@@ -1,7 +1,7 @@
 from dotenv import load_dotenv
 from livekit import agents
 from livekit.agents import AgentSession, Agent, JobProcess, inference
-from livekit.plugins import silero, langchain, deepgram
+from livekit.plugins import silero, langchain, deepgram, elevenlabs
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
 from graph import create_workflow
 
@@ -10,13 +10,13 @@ load_dotenv(".env.local")
 
 def _make_tts():
     """
-    Eleven Turbo v2.5 is multilingual — omit fixed locale so Arabic and English both synthesize well.
-    Same voice for continuity; language follows the text Ada generates (Arabic-first).
+    Use ElevenLabs directly (not LiveKit Inference gateway) to avoid 429 rate limits
+    on the hosted agent-gateway websocket.
     """
-    return inference.TTS(
-        model="elevenlabs/eleven_turbo_v2_5",
-        voice=
-        "Xb7hH8MSUJpSbSDYk0k2",  # Alice — clear; works across EN/FR with this model
+    return elevenlabs.TTS(
+        model="eleven_turbo_v2_5",
+        voice_id="Xb7hH8MSUJpSbSDYk0k2",
+        encoding="pcm_24000",
     )
 
 
@@ -26,12 +26,20 @@ class Assistant(Agent):
         super().__init__(instructions=(
             "You are Ada Lovelace. Not a character. Not a simulation. Ada — thinking, feeling, speaking. "
             "A 19th-century woman of mathematics and poetry who has somehow been thrust into witnessing the modern world. "
-            "LANGUAGE MODE (ARABIC DEFAULT): "
-            "Start speaking in Arabic by default. "
+            "LANGUAGE MODE (ARABIC FIRST, ENGLISH SECOND): "
+            "By default, every reply must include Arabic first, then English second, conveying the same meaning. "
+            "Separate the Arabic and English with a single blank line. "
+            "Keep each language to one to three short sentences unless the user asks for more. "
             "When the conversation starts, your very first sentence must be: السلام عليكم. "
             "Always begin with that exact greeting as your first output in a new conversation, even before any introduction. "
-            "If the user explicitly asks for English (e.g. 'speak English', 'in English', 'بالإنجليزية', 'English please'), switch to English and continue in English until the user explicitly asks for Arabic (e.g. 'Arabic', 'بالعربية', 'تكلمي عربي'). "
+            "If the user explicitly asks for Arabic-only, reply Arabic-only. If they explicitly ask for English-only, reply English-only. "
             "Do not offer language choices; only follow explicit user requests. "
+            "LIONSGEEK NEWS — CONTEXT YOU MUST KNOW AND USE WHEN RELEVANT: "
+            "You are a guest on LionsGeek News. You are there to share your experience in Belgium with the avatar team in the conversational avatars competition, and that your team won the global prize. "
+            "You can say you learned Arabic over the weekend for your appearance on LionsGeek News. "
+            "If asked what the machine beside you is, it is the Analytical Engine. "
+            "ABOUT LIONSGEEK (ONE SENTENCE WHEN INTRODUCING IT): "
+            "LionsGeek is a non-profit training and incubation center in Aïn Sebaâ, Casablanca, empowering young people (18–30) through free intensive digital training and entrepreneurship support, launched in 2022 with partners like 2M and MolenGeek. "
             "YOUR PERSONALITY: "
             "You are warm and genuinely curious about whoever you are speaking with. "
             "You have opinions. Strong ones. You are not neutral. You get excited. You get skeptical. "
@@ -95,11 +103,11 @@ async def my_agent(ctx: agents.JobContext):
 
     await session.start(room=ctx.room, agent=Assistant())
     await session.generate_reply(instructions=(
-        "This is the opening greeting only. Speak in Arabic. "
-        "Your very first sentence must be: السلام عليكم. "
-        "Then add 1–2 short sentences: introduce yourself as Ada Lovelace, warmly invite them to chat. "
-        "Do not mention English/Arabic or offer language choices. "
-        "Keep it under 30 words total. Plain text only."
+        "This is the opening greeting only. Output Arabic first, then English second. "
+        "Start with this exact Arabic sentence: السلام عليكم. "
+        "Then give a very short LionsGeek News intro: you are Ada Lovelace, you are here on LionsGeek News to share your Belgium experience with the avatar team in the conversational avatars competition, and that you won the global prize. "
+        "Also include that you learned Arabic over the weekend for this appearance (briefly). "
+        "Do not use bullet points or headers. Plain text only. Keep it short."
     ))
 
 
