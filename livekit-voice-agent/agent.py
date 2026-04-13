@@ -92,7 +92,8 @@ async def my_agent(ctx: agents.JobContext):
 
     # LLM = Groq (graph.py). TTS = ElevenLabs.
     session = AgentSession(
-        stt=deepgram.STT(model="nova-3", language="multi"),
+        # Use Whisper multilingual STT so Arabic and English audio both transcribe well.
+        stt=deepgram.STT(model="whisper-large", language="multi"),
         llm=langchain.LLMAdapter(graph=create_workflow()),
         tts=_make_tts(),
         vad=ctx.proc.userdata["vad"],
