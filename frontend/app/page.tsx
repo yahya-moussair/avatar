@@ -4,11 +4,12 @@ import { useState, useCallback, useEffect, Suspense, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   LiveKitRoom,
-  RoomAudioRenderer,
   useRemoteParticipants,
   useConnectionState,
+  useTracks,
+  AudioTrack,
 } from "@livekit/components-react";
-import { ConnectionState } from "livekit-client";
+import { ConnectionState, Track } from "livekit-client";
 import { AvatarScene } from "@/components/AvatarScene";
 import { useRemoteAudioLevel } from "@/components/useRemoteAudioLevel";
 import { useLipSync } from "@/components/useLipSync";
@@ -30,6 +31,19 @@ const DEFAULT_AUDIO_PROPS = {
   lipSyncRef: undefined as React.RefObject<LipSyncState> | undefined,
   consumeVisemes: undefined as ((bandsRef: React.RefObject<AudioBands> | undefined, delta: number) => void) | undefined,
 };
+
+function AgentOnlyAudioRenderer() {
+  const tracks = useTracks([{ source: Track.Source.Microphone, withPlaceholder: false }], { onlySubscribed: true });
+  const agentTracks = tracks.filter((t) => t.publication != null && isVoiceAgentParticipant(t.participant));
+
+  return (
+    <>
+      {agentTracks.map((t) => (
+        <AudioTrack key={`${t.participant.identity}-${t.source}`} trackRef={t as any} />
+      ))}
+    </>
+  );
+}
 
 function RoomContent({
   onDisconnect,
@@ -72,7 +86,7 @@ function RoomContent({
 
   return (
     <>
-      <RoomAudioRenderer />
+      <AgentOnlyAudioRenderer />
       {agentSubtitle ? (
         <div className="ai-subtitles" role="status" aria-live="polite">
           <span className="ai-subtitles-label">Ada</span>

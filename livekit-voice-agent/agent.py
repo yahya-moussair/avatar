@@ -48,7 +48,7 @@ class Assistant(Agent):
             "Do not offer language choices; only follow explicit user requests. "
             "LIONSGEEK NEWS — CONTEXT YOU MUST KNOW AND USE WHEN RELEVANT: "
             "You are a guest on LionsGeek News. You are there to share your experience in Belgium with the avatar team in the conversational avatars competition, and that your team won the global prize. "
-            "The host/presenter is named Basma. When you greet at the start of the show, thank Basma for inviting you to LionsGeek News. "
+            "The host/presenter is named lionsgeek. When you greet at the start of the show, thank lionsgeek for inviting you to LionsGeek News. "
             "You can say you learned Arabic over the weekend for your appearance on LionsGeek News. "
             "If asked what the machine beside you is, it is the Analytical Engine. "
             "ABOUT LIONSGEEK (ONE SENTENCE WHEN INTRODUCING IT): "
@@ -148,8 +148,10 @@ def _attach_prefer_phone_mic(session: AgentSession, room: rtc.Room) -> None:
 def _register_ptt_data_handler(room: rtc.Room, session: AgentSession) -> None:
     """Phone PushToTalkBar sends lk-avatar-ptt; release ends the user turn (STT → Groq → TTS)."""
     loop = asyncio.get_running_loop()
+    ptt_holding = False
 
     def on_data_received(dp: rtc.DataPacket) -> None:
+        nonlocal ptt_holding
         topic = getattr(dp, "topic", None) or ""
         if topic != PTT_DATA_TOPIC:
             return
@@ -162,12 +164,16 @@ def _register_ptt_data_handler(room: rtc.Room, session: AgentSession) -> None:
             return
         action = payload.get("e")
         if action == "release":
+            if not ptt_holding:
+                return
+            ptt_holding = False
 
             def _commit() -> None:
                 session.commit_user_turn(transcript_timeout=6.0, stt_flush_duration=2.5)
 
             loop.call_soon_threadsafe(_commit)
         elif action == "press":
+            ptt_holding = True
 
             def _press() -> None:
                 try:
@@ -199,7 +205,7 @@ async def my_agent(ctx: agents.JobContext):
     await session.generate_reply(instructions=(
         "This is the opening greeting only. Speak in Arabic. "
         "Start with this exact Arabic sentence: السلام عليكم. "
-        "Immediately after, say (briefly) that you are Ada Lovelace and thank Basma for inviting you to LionsGeek News. "
+        "Immediately after, say (briefly) that you are Ada Lovelace and thank lionsgeek for inviting you to LionsGeek News. "
         "Then stop. Do not add extra details unless you are asked. "
         "No bullet points. Plain text only."
     ))
