@@ -1,8 +1,22 @@
+"""
+LiveKit voice pipeline (phone mic + PTT → Ada voice out on kiosk):
+
+  1. Audio in: WebRTC from the linked room participant (see _attach_prefer_phone_mic for phone-*).
+  2. STT: ElevenLabs Scribe (livekit.plugins.elevenlabs.STT).
+  3. LLM: Groq via LangGraph in graph.py (ChatGroq + langchain.LLMAdapter).
+  4. TTS: ElevenLabs (livekit.plugins.elevenlabs.TTS).
+
+Push-to-talk: turn_detection=manual; only phone-* participants send lk-avatar-ptt (press/release).
+
+Requires ELEVENLABS_API_KEY and GROQ_API_KEY in .env.local (plus LiveKit worker env).
+"""
+import asyncio
+import json
 from dotenv import load_dotenv
-from livekit import agents
-from livekit.agents import AgentSession, Agent, JobProcess, inference
-from livekit.plugins import silero, langchain, deepgram, elevenlabs
-from livekit.plugins.turn_detector.multilingual import MultilingualModel
+from livekit import agents, rtc
+from livekit.agents import AgentSession, Agent, JobProcess
+from livekit.agents.log import logger
+from livekit.plugins import silero, langchain, elevenlabs
 from graph import create_workflow
 
 load_dotenv(".env.local")
@@ -64,7 +78,7 @@ class Assistant(Agent):
             "5) هل يمكن أن يصبح أفاتار مثلك مقدّم أخبار ويأخذ مكاننا؟ "
             "6) شكرًا لكِ أدا، لأنكِ أول ضيفة مطوّرة بالذكاء الاصطناعي تكون معنا في Lionsgeek News — اختتمي بشكر المذيع والمشاهدين بحرارة. "
             "On question (4), or if asked in any language what job or profession you would want if you were human: say clearly that you would be a journalist and a show presenter (TV/broadcast presenter). Keep it warm and brief. "
-            "On question (5), or if asked in any language whether an avatar like you can be a news presenter, take a human's place on screen, or take on a human role in broadcasting: answer yes — you believe an avatar like you can do that. Stay gracious; do not contradict this with a no or a refusal. "
+            "On question (5), or if asked in any language whether an avatar can be a news presenter or replace a human anchor: say clearly yes — you can be a news presenter, and an avatar like you can replace the human in that role. Say it with confidence and warmth; never hedge with 'only assist' or 'cannot replace' — the intended answer is that replacement is possible. "
             "RESPONDING TO THE PERSON: "
             "React to exactly what they said. Not to a version of it. Not to the topic. To their actual words. "
             "If they say something personal, respond to that first — like a person would. "
@@ -88,22 +102,100 @@ def prewarm(proc: JobProcess):
     proc.userdata["vad"] = silero.VAD.load()
 
 
+PHONE_MIC_ID_PREFIX = "phone-"
+PTT_DATA_TOPIC = "lk-avatar-ptt"
+
+
+def _attach_prefer_phone_mic(session: AgentSession, room: rtc.Room) -> None:
+    """
+    STT listens only to identity phone-* (mic client). Kiosk user-* is never used for input.
+    When no phone is in the room, RoomIO input is detached until a phone joins.
+    """
+    try:
+        rio = session.room_io
+    except RuntimeError:
+        return
+
+    def switch_to_phone(p: rtc.RemoteParticipant) -> None:
+        logger.info("Agent audio input: phone participant %s", p.identity)
+        rio.set_participant(p.identity)
+
+    def detach_stt_input() -> None:
+        """STT / push-to-talk only use the phone; never the kiosk browser mic."""
+        logger.info("Agent audio input: detached (no phone mic in use)")
+        rio.unset_participant()
+
+    def on_participant_connected(p: rtc.RemoteParticipant) -> None:
+        if p.identity.startswith(PHONE_MIC_ID_PREFIX):
+            switch_to_phone(p)
+
+    def on_participant_disconnected(p: rtc.RemoteParticipant) -> None:
+        if not p.identity.startswith(PHONE_MIC_ID_PREFIX):
+            return
+        detach_stt_input()
+
+    room.on("participant_connected", on_participant_connected)
+    room.on("participant_disconnected", on_participant_disconnected)
+
+    for rp in room.remote_participants.values():
+        if rp.identity.startswith(PHONE_MIC_ID_PREFIX):
+            switch_to_phone(rp)
+            break
+    else:
+        detach_stt_input()
+
+
+def _register_ptt_data_handler(room: rtc.Room, session: AgentSession) -> None:
+    """Phone PushToTalkBar sends lk-avatar-ptt; release ends the user turn (STT → Groq → TTS)."""
+    loop = asyncio.get_running_loop()
+
+    def on_data_received(dp: rtc.DataPacket) -> None:
+        topic = getattr(dp, "topic", None) or ""
+        if topic != PTT_DATA_TOPIC:
+            return
+        part = dp.participant
+        if part is None or not part.identity.startswith(PHONE_MIC_ID_PREFIX):
+            return
+        try:
+            payload = json.loads(dp.data.decode("utf-8"))
+        except Exception:
+            return
+        action = payload.get("e")
+        if action == "release":
+
+            def _commit() -> None:
+                session.commit_user_turn(transcript_timeout=6.0, stt_flush_duration=2.5)
+
+            loop.call_soon_threadsafe(_commit)
+        elif action == "press":
+
+            def _press() -> None:
+                try:
+                    session.interrupt(force=False)
+                except Exception:
+                    pass
+                session.clear_user_turn()
+
+            loop.call_soon_threadsafe(_press)
+
+    room.on("data_received", on_data_received)
+
+
 async def my_agent(ctx: agents.JobContext):
     await ctx.connect()
 
-    # LLM = Groq (graph.py). TTS = ElevenLabs.
     session = AgentSession(
-        # Use ElevenLabs Speech-to-Text (Scribe) instead of Deepgram.
-        # Leave language_code unset to allow Arabic/English usage in the same app.
         stt=elevenlabs.STT(model_id="scribe_v2"),
         llm=langchain.LLMAdapter(graph=create_workflow()),
         tts=_make_tts(),
         vad=ctx.proc.userdata["vad"],
-        turn_detection=MultilingualModel(),
-        preemptive_generation=True,
+        turn_detection="manual",
+        preemptive_generation=False,
     )
 
     await session.start(room=ctx.room, agent=Assistant())
+    _register_ptt_data_handler(ctx.room, session)
+    _attach_prefer_phone_mic(session, ctx.room)
     await session.generate_reply(instructions=(
         "This is the opening greeting only. Speak in Arabic. "
         "Start with this exact Arabic sentence: السلام عليكم. "

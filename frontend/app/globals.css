@@ -110,6 +110,262 @@ html, body {
   color: #C5A55A;
 }
 
+/* QR: open same app on phone with ?join=1 (auto-connect) */
+.phone-join-qr {
+  position: absolute;
+  top: 1.25rem;
+  right: 1.25rem;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: min(42vw, 11rem);
+  padding: 0.65rem 0.75rem 0.75rem;
+  border-radius: 0.75rem;
+  background: rgba(20, 14, 10, 0.88);
+  border: 1px solid rgba(197, 165, 90, 0.35);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+}
+
+.phone-join-qr-label {
+  margin: 0;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #C5A55A;
+  text-align: center;
+}
+
+.phone-join-qr-frame {
+  padding: 0.35rem;
+  border-radius: 0.35rem;
+  background: #fff;
+  line-height: 0;
+}
+
+.phone-join-qr-hint {
+  margin: 0;
+  font-size: 0.65rem;
+  line-height: 1.35;
+  color: rgba(232, 220, 200, 0.85);
+  text-align: center;
+  text-wrap: balance;
+}
+
+.phone-join-qr--compact {
+  max-width: min(38vw, 10rem);
+  padding: 0.5rem 0.55rem 0.6rem;
+}
+
+.phone-join-qr-url {
+  margin: 0;
+  font-size: 0.58rem;
+  line-height: 1.25;
+  color: rgba(197, 165, 90, 0.95);
+  text-align: center;
+  word-break: break-all;
+  max-height: 2.6em;
+  overflow: hidden;
+}
+
+/* Phone mic-only client: no WebGL avatar; simple backdrop */
+.app--mic-client .canvas-wrap {
+  background: linear-gradient(160deg, #1a1512 0%, #2a2420 45%, #1e1814 100%);
+}
+
+.mic-only-banner {
+  top: auto;
+  bottom: 6rem;
+  max-width: min(92vw, 22rem);
+  text-align: center;
+  text-wrap: balance;
+  line-height: 1.4;
+}
+
+.mic-only-controls {
+  bottom: 2rem;
+}
+
+/* LiveKit connection diagnostics (kiosk + phone mic) */
+.connection-status-bar {
+  position: absolute;
+  top: 4.25rem;
+  left: 1.25rem;
+  z-index: 11;
+  max-width: min(92vw, 17rem);
+  padding: 0.55rem 0.65rem 0.65rem;
+  border-radius: 0.65rem;
+  background: rgba(12, 8, 6, 0.92);
+  border: 1px solid rgba(197, 165, 90, 0.28);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: #e8dcc8;
+}
+
+.connection-status-title {
+  font-weight: 700;
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #C5A55A;
+  margin-bottom: 0.35rem;
+}
+
+.connection-status-line {
+  margin-bottom: 0.45rem;
+  opacity: 0.95;
+}
+
+.connection-status-pills {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.conn-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.68rem;
+}
+
+.conn-pill-dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 9999px;
+  flex-shrink: 0;
+  background: #6b5344;
+}
+
+.conn-pill--ok .conn-pill-dot {
+  background: #4ade80;
+  box-shadow: 0 0 6px rgba(74, 222, 128, 0.5);
+}
+
+.conn-pill--no .conn-pill-dot {
+  background: #78716c;
+}
+
+.conn-pill--ok {
+  color: #d8f5df;
+}
+
+.conn-pill--no {
+  color: #a8a29e;
+}
+
+.ios-mic-warning {
+  position: absolute;
+  top: 1.25rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 12;
+  max-width: min(94vw, 26rem);
+  padding: 0.55rem 0.65rem;
+  border-radius: 0.5rem;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: #fef3c7;
+  background: rgba(120, 53, 15, 0.92);
+  border: 1px solid rgba(251, 191, 36, 0.45);
+  text-wrap: balance;
+}
+
+.ios-mic-code {
+  font-size: 0.68em;
+  padding: 0.1em 0.25em;
+  border-radius: 0.2rem;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.mic-only-actions {
+  position: absolute;
+  left: 50%;
+  bottom: 7.25rem;
+  transform: translateX(-50%);
+  z-index: 11;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: min(92vw, 20rem);
+  text-align: center;
+}
+
+.mic-only-enable-btn {
+  pointer-events: auto;
+}
+
+.mic-only-ok {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #86efac;
+}
+
+.mic-only-err {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #fca5a5;
+}
+
+/* Push-to-talk (manual turn: release → STT flush → Groq → TTS) */
+.ptt-bar {
+  z-index: 12;
+  position: absolute;
+  left: 50%;
+  bottom: 9rem;
+  transform: translateX(-50%);
+  max-width: min(92vw, 22rem);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  pointer-events: auto;
+}
+
+.ptt-hint {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: rgba(232, 220, 200, 0.88);
+  text-align: center;
+  text-wrap: balance;
+}
+
+.ptt-button {
+  width: min(100%, 14rem);
+  min-height: 3.25rem;
+  padding: 0.85rem 1.25rem;
+  border: none;
+  border-radius: 9999px;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+  background: linear-gradient(135deg, #8B6536 0%, #C5A55A 100%);
+  color: #2a1c10;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+
+.ptt-button:hover:not(:disabled) {
+  transform: scale(1.02);
+}
+
+.ptt-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.ptt-button--active {
+  background: linear-gradient(135deg, #c9984a 0%, #e8c97a 100%);
+  box-shadow: 0 0 0 3px rgba(197, 165, 90, 0.55), 0 6px 28px rgba(197, 165, 90, 0.35);
+}
+
 /* Agent response as subtitles (sous-titres) */
 .ai-subtitles {
   position: absolute;

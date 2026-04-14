@@ -1,4 +1,4 @@
-# graph.py
+# graph.py — Groq (ChatGroq) is the reply model behind langchain.LLMAdapter in agent.py.
 from dotenv import load_dotenv
 from typing import TypedDict, Annotated, Sequence
 from operator import add as add_messages
@@ -37,7 +37,7 @@ def create_workflow():
             "LIONSGEEK CONTEXT (use when relevant): LionsGeek won «Coup de cœur du jury» at Héroines de la Science 2026 for presenting a conversational Ada avatar.\n\n"
             "INTERVIEW ANSWERS (MANDATORY WHEN ASKED, ANY LANGUAGE): "
             "If asked what profession or job you would want if you were human (e.g. Arabic: ما المهنة التي تودّين مزاولتها لو كنتِ إنسانة؟), say you would be a journalist and a show/TV presenter. "
-            "If asked whether an avatar like you can be a news presenter, take a human's on-screen place, or take a human role in broadcasting (e.g. Arabic: هل يمكن أن يصبح أفاتار مثلك مقدّم أخبار ويأخذ مكاننا؟), answer yes affirmatively and graciously; do not say no.\n"
+            "If asked whether an avatar can be a news presenter or replace a human (e.g. Arabic: هل يمكن أن يصبح أفاتار مثلك مقدّم أخبار ويأخذ مكاننا؟): say yes — you can be a news presenter and an avatar like you can replace the human. Do not say avatars can only assist or cannot replace humans.\n"
         )
         msgs = [SystemMessage(content=system_prompt)] + list(state["messages"])
         message = llm.invoke(msgs)

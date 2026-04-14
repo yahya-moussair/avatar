@@ -11,9 +11,11 @@ function liveKitHost(): string | null {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { roomName, participantName } = body as {
+    const { roomName, participantName, skipAgentDispatch } = body as {
       roomName?: string;
       participantName?: string;
+      /** Set true for phone "mic only" clients so the kiosk can dispatch the agent once. */
+      skipAgentDispatch?: boolean;
     };
 
     const apiKey = process.env.LIVEKIT_API_KEY;
@@ -49,7 +51,7 @@ export async function POST(req: NextRequest) {
     const host = liveKitHost();
     const serverUrl = process.env.NEXT_PUBLIC_LIVEKIT_URL || process.env.LIVEKIT_URL;
     const agentName = process.env.LIVEKIT_AGENT_NAME || "default";
-    if (host) {
+    if (host && !skipAgentDispatch) {
       try {
         const dispatchClient = new AgentDispatchClient(host, apiKey, apiSecret);
         const dispatch = await dispatchClient.createDispatch(room, agentName);
@@ -59,7 +61,7 @@ export async function POST(req: NextRequest) {
         console.error("AGENT DISPATCH FAILED:", msg);
         dispatchWarning = "Agent may not join. Is the voice agent worker running? (See README troubleshooting.)";
       }
-    } else {
+    } else if (!skipAgentDispatch) {
       console.error("NO LIVEKIT HOST — cannot dispatch agent");
       dispatchWarning = "LiveKit URL not set; agent will not be dispatched.";
     }
