@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { AccessToken, AgentDispatchClient } from "livekit-server-sdk";
+import { AccessToken, AgentDispatchClient, RoomServiceClient } from "livekit-server-sdk";
 
 /** LiveKit API host (https) from env wss URL. */
 function liveKitHost(): string | null {
   const url = process.env.NEXT_PUBLIC_LIVEKIT_URL || process.env.LIVEKIT_URL;
   if (!url) return null;
   return url.replace(/^wss:/, "https:").replace(/^ws:/, "http:");
+}
+
+function isLikelyVoiceAgentIdentity(identity: string | undefined | null): boolean {
+  const id = (identity ?? "").toLowerCase();
+  return id.startsWith("agent") || id.includes("agent_");
 }
 
 export async function POST(req: NextRequest) {
@@ -53,9 +58,21 @@ export async function POST(req: NextRequest) {
     const agentName = process.env.LIVEKIT_AGENT_NAME || "default";
     if (host && !skipAgentDispatch) {
       try {
+        // Prevent multiple agents from being dispatched into the same room (which causes "double voices").
+        const roomClient = new RoomServiceClient(host, apiKey, apiSecret);
+        const participants = await roomClient.listParticipants(room);
+        const agentAlreadyInRoom = participants.some((p: any) => {
+          if (p?.kind != null && (p.kind === "AGENT" || p.kind === 2)) return true;
+          if (p?.isAgent === true) return true;
+          return isLikelyVoiceAgentIdentity(p?.identity);
+        });
+        if (agentAlreadyInRoom) {
+          console.log("Agent already in room — skipping dispatch");
+        } else {
         const dispatchClient = new AgentDispatchClient(host, apiKey, apiSecret);
         const dispatch = await dispatchClient.createDispatch(room, agentName);
         console.log("Agent dispatch OK:", JSON.stringify(dispatch));
+        }
       } catch (dispatchErr: unknown) {
         const msg = dispatchErr instanceof Error ? dispatchErr.message : String(dispatchErr);
         console.error("AGENT DISPATCH FAILED:", msg);
