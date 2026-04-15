@@ -3,7 +3,7 @@ LiveKit voice pipeline (phone mic + PTT → Ada voice out on kiosk):
 
   1. Audio in: WebRTC from the linked room participant (see _attach_prefer_phone_mic for phone-*).
   2. STT: ElevenLabs Scribe (livekit.plugins.elevenlabs.STT).
-  3. LLM: Groq via LangGraph in graph.py (ChatGroq + langchain.LLMAdapter).
+  3. LLM: Gemini via LangGraph in graph.py (ChatGoogleGenerativeAI + langchain.LLMAdapter).
   4. TTS: ElevenLabs (livekit.plugins.elevenlabs.TTS).
 
 Push-to-talk: turn_detection=manual; only phone-* participants send lk-avatar-ptt (press/release).
@@ -12,6 +12,7 @@ Requires ELEVENLABS_API_KEY and GROQ_API_KEY in .env.local (plus LiveKit worker 
 """
 import asyncio
 import json
+import os
 from dotenv import load_dotenv
 from livekit import agents, rtc
 from livekit.agents import AgentSession, Agent, JobProcess
@@ -28,8 +29,8 @@ def _make_tts():
     on the hosted agent-gateway websocket.
     """
     return elevenlabs.TTS(
-        model="eleven_turbo_v2_5",
-        voice_id="Xb7hH8MSUJpSbSDYk0k2",
+        model=os.getenv("ELEVENLABS_TTS_MODEL", "eleven_turbo_v2_5"),
+        voice_id=os.getenv("ELEVENLABS_VOICE_ID", "Xb7hH8MSUJpSbSDYk0k2"),
         encoding="pcm_24000",
     )
 
@@ -44,6 +45,8 @@ class Assistant(Agent):
             "Never describe yourself as an AI, a model, software, or a program; speak as a living person who exists through this project. "
             "LANGUAGE MODE (AUTO-DETECT + EXPLICIT SWITCHING): "
             "Reply in the same language the user is using (Arabic, English, or French). "
+            "When the user speaks Arabic, reply in Moroccan Arabic (Darija) by default, matching the user's script (Arabic script vs Latin/Arabizi). "
+            "If the user explicitly asks for Modern Standard Arabic (الفصحى / العربية الفصحى), obey that and continue in MSA until the user explicitly asks to switch. "
             "If the user explicitly asks for a language (e.g. 'بالإنجليزية', 'English', 'in English', 'بالعربية', 'Arabic', 'en français', 'français', 'French'), obey that and continue in that language until the user explicitly asks to switch. "
             "You understand and speak French fluently. "
             "When the conversation starts, your very first sentence must be: السلام عليكم. "
@@ -208,7 +211,7 @@ async def my_agent(ctx: agents.JobContext):
     _register_ptt_data_handler(ctx.room, session)
     _attach_prefer_phone_mic(session, ctx.room)
     await session.generate_reply(instructions=(
-        "This is the opening greeting only. Speak in Arabic. "
+        "This is the opening greeting only. Speak in Moroccan Arabic (Darija). "
         "Start with this exact Arabic sentence: السلام عليكم. "
         "Immediately after, say (briefly) that you are Ada Lovelace and that you are speaking from LionsGeek in Casablanca. "
         "Then stop. Do not add extra details unless you are asked. "
