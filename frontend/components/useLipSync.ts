@@ -7,6 +7,7 @@ import type { TranscriptionSegment, Participant } from "livekit-client";
 import { textToVisemes, VISEME_MORPH_PRESETS, VISEME_KEYS } from "./visemeMap";
 import type { VisemeKey, MorphWeights } from "./visemeMap";
 import type { AudioBands } from "./useRemoteAudioLevel";
+import { isVoiceAgentParticipant } from "@/lib/livekitParticipants";
 
 // ─── Scheduled viseme in the playback queue ────────────────────────────
 
@@ -137,13 +138,21 @@ export function useLipSync() {
   });
   // Smoothed expression morph weights (blended over time)
   const smoothExpressionWeightsRef = useRef<Record<string, number>>({});
+  const chosenAgentIdentityRef = useRef<string | null>(null);
 
   // ─── Handle incoming transcription events ─────────────────────────
 
   const handleTranscription = useCallback(
     (segments: TranscriptionSegment[], participant?: Participant) => {
       // Only process the remote agent's speech
-      if (participant?.isLocal) return;
+      if (!participant || participant.isLocal) return;
+      if (!isVoiceAgentParticipant(participant)) return;
+
+      // Lock onto one agent identity to avoid duplicates if multiple workers join.
+      if (!chosenAgentIdentityRef.current) {
+        chosenAgentIdentityRef.current = participant.identity;
+      }
+      if (participant.identity !== chosenAgentIdentityRef.current) return;
 
       for (const seg of segments) {
         // Skip already-processed segments

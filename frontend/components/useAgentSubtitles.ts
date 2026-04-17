@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { useRoomContext } from "@livekit/components-react";
 import { RoomEvent } from "livekit-client";
 import type { TranscriptionSegment, Participant } from "livekit-client";
+import { isVoiceAgentParticipant } from "@/lib/livekitParticipants";
 
 type SegmentEntry = { text: string; order: number };
 
@@ -17,6 +18,7 @@ export function useAgentSubtitles(): string {
   const byIdRef = useRef<Map<string, SegmentEntry>>(new Map());
   const orderRef = useRef(0);
   const [subtitle, setSubtitle] = useState("");
+  const chosenAgentIdentityRef = useRef<string | null>(null);
 
   const rebuild = useCallback(() => {
     const parts = Array.from(byIdRef.current.values())
@@ -29,7 +31,14 @@ export function useAgentSubtitles(): string {
 
   const handleTranscription = useCallback(
     (segments: TranscriptionSegment[], participant?: Participant) => {
-      if (participant?.isLocal) return;
+      if (!participant || participant.isLocal) return;
+      if (!isVoiceAgentParticipant(participant)) return;
+
+      // Lock onto the first agent identity we see so multiple agents don't duplicate subtitles.
+      if (!chosenAgentIdentityRef.current) {
+        chosenAgentIdentityRef.current = participant.identity;
+      }
+      if (participant.identity !== chosenAgentIdentityRef.current) return;
 
       for (const seg of segments) {
         const text = (seg.text ?? "").trim();

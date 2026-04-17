@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTracks } from "@livekit/components-react";
 import { Track } from "livekit-client";
+import { isVoiceAgentParticipant } from "@/lib/livekitParticipants";
 
 export interface AudioBands {
   volume: number;   // overall energy 0-1
@@ -38,6 +39,7 @@ export function useRemoteAudioLevel(): {
     const remoteAudio = tracks.find(
       (t) =>
         !t.participant.isLocal &&
+        isVoiceAgentParticipant(t.participant) &&
         t.publication.kind === Track.Kind.Audio &&
         t.publication.track?.mediaStreamTrack
     );

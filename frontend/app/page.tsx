@@ -34,11 +34,19 @@ const DEFAULT_AUDIO_PROPS = {
 
 function AgentOnlyAudioRenderer() {
   const tracks = useTracks([{ source: Track.Source.Microphone, withPlaceholder: false }], { onlySubscribed: true });
-  const agentTracks = tracks.filter((t) => t.publication != null && isVoiceAgentParticipant(t.participant));
+  const agentTracks = tracks
+    .filter((t) => t.publication != null && isVoiceAgentParticipant(t.participant))
+    .sort((a, b) => a.participant.identity.localeCompare(b.participant.identity));
+
+  // If multiple agents accidentally join (e.g. worker started twice), avoid double audio.
+  const chosenAgentIdentity = agentTracks[0]?.participant.identity ?? null;
+  const chosenTracks = chosenAgentIdentity
+    ? agentTracks.filter((t) => t.participant.identity === chosenAgentIdentity)
+    : [];
 
   return (
     <>
-      {agentTracks.map((t) => (
+      {chosenTracks.map((t) => (
         <AudioTrack key={`${t.participant.identity}-${t.source}`} trackRef={t as any} />
       ))}
     </>

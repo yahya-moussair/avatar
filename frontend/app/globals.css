@@ -400,4 +400,8 @@ html, body {
   color: #f5ecd8;
   text-align: center;
   text-wrap: balance;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
